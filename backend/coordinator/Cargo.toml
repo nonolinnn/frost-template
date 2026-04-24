@@ -18,3 +18,6 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 tower-http.workspace = true
 time.workspace = true
+reqwest.workspace = true
+bs58.workspace = true
+frost-ed25519.workspace = true

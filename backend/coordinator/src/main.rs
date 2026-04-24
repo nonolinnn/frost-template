@@ -21,6 +21,7 @@ use crate::config::Config;
 pub struct AppState {
     pub pool: PgPool,
     pub config: Config,
+    pub http_client: reqwest::Client,
 }
 
 #[tokio::main]
@@ -45,16 +46,22 @@ async fn main() {
     tracing::info!("Connected to PostgreSQL");
 
     // Run migrations on startup
-    sqlx::migrate!("../migrations/coordinator")
+    sqlx::migrate!("./migrations")
         .run(&pool)
         .await
         .expect("Failed to run database migrations");
 
     tracing::info!("Database migrations applied");
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client");
+
     let state = AppState {
         pool,
         config: config.clone(),
+        http_client,
     };
 
     let app = Router::new()

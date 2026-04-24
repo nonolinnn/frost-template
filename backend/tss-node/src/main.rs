@@ -49,7 +49,7 @@ async fn main() {
     tracing::info!(node_id = %config.node_id, "Connected to PostgreSQL");
 
     // Run migrations on startup
-    sqlx::migrate!("../migrations/node")
+    sqlx::migrate!("./migrations")
         .run(&pool)
         .await
         .expect("Failed to run database migrations");

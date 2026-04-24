@@ -221,6 +221,40 @@
 
 ---
 
+### 後端 DKG 協議實作（fr-004）— 2026-04-22
+
+  **問題：** 實作 FROST 門檻簽名的核心——分散式金鑰生成（DKG）。兩個 node
+  透過三輪協議協作產生共享金鑰對，任何一方都不持有完整私鑰。這是整個系統密碼學正確性的基礎。
+
+  **AI 互動：** 派後端 agent 實作完整的 DKG 三輪流程。給它 frost-ed25519 的 API 範例、API 合約和 DB
+  schema 作為參考。這是 human review PRD——密碼學邏輯我必須自己看懂才能放行。
+
+  **AI 產出的內容：**
+  - TSS Node 端三個 round handler（+282 行）：直接調用 `frost_ed25519::keys::dkg::{part1, part2,
+  part3}`
+  - Coordinator 端 DKG 協調邏輯（+475 行）：透過 reqwest proxy 到 node，追蹤 per-node round
+  進度，偵測 DKG 完成
+  - 順便完成了 fr-007 review 時提出的 migration 路徑重構（搬進各 crate 目錄）
+
+  **我的審查判斷：**
+  - 我逐步追蹤了三輪的資料流向：R1 各自產生承諾 → R2 交換承諾後計算加密份額 → R3
+  驗證份額並產生最終金鑰。Coordinator 在每輪都有前置條件檢查（必須雙方都完成上一輪），防止跳步
+  - 確認 KeyPackage（私鑰份額）只存在 node 自己的 DB，Coordinator 只存公開資料（group public key 的
+  Base58 字串）
+  - 確認重複執行防護：每個 node 的每個 round 做過就不能再做
+  - 確認前端 6 個獨立按鈕（2 nodes × 3 rounds）的設計正確反映了協議本質——每個 node
+  各自操作，不存在「同時觸發」的需求。面試官能逐步觀察協議推進
+
+  **我學到的：**
+  - FROST DKG 的三輪本質：Round 1 是承諾（commitment），Round 2 是交換（secret sharing），Round 3
+  是驗證與最終化。每輪都必須雙方完成才能進下一輪，這不是實作上的限制而是密碼學協議本身的要求
+  - `rand::thread_rng()` 在 Rust 中是 `!Send`，不能用在 axum 的 async handler 裡，改用 `OsRng`
+  - FROST `Identifier` 可以從字串確定性衍生（`Identifier::derive()`），不需要手動分配數字 ID
+  - `VerifyingKey::serialize()` 回傳 32-byte compressed Edwards Y 座標，Base58 編碼後直接就是 Solana
+  地址格式
+
+---
+
 ## 持續記錄的模板
 
 ```markdown

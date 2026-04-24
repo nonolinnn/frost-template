@@ -2,6 +2,8 @@
 //!
 //! All values are parsed from environment variables at startup.
 
+use std::collections::HashMap;
+
 /// Coordinator configuration parsed from environment variables.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -11,6 +13,8 @@ pub struct Config {
     pub port: u16,
     /// Solana RPC endpoint (Devnet).
     pub solana_rpc_url: String,
+    /// Map of node ID to base URL.
+    pub node_urls: HashMap<String, String>,
 }
 
 impl Config {
@@ -29,10 +33,25 @@ impl Config {
         let solana_rpc_url = std::env::var("SOLANA_RPC_URL")
             .unwrap_or_else(|_| "https://api.devnet.solana.com".into());
 
+        let node_a_url = std::env::var("NODE_A_URL")
+            .unwrap_or_else(|_| "http://node-a:8081".into());
+        let node_b_url = std::env::var("NODE_B_URL")
+            .unwrap_or_else(|_| "http://node-b:8082".into());
+
+        let mut node_urls = HashMap::new();
+        node_urls.insert("node-a".to_string(), node_a_url);
+        node_urls.insert("node-b".to_string(), node_b_url);
+
         Self {
             database_url,
             port,
             solana_rpc_url,
+            node_urls,
         }
+    }
+
+    /// Get the base URL for a node by ID.
+    pub fn node_url(&self, node_id: &str) -> Option<&str> {
+        self.node_urls.get(node_id).map(|s| s.as_str())
     }
 }
