@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a10;
+  --foreground: #f0f0f5;
 }
 
 @theme inline {
@@ -10,17 +10,105 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Surface backgrounds */
+  --color-surface: #111118;
+  --color-surface-raised: #16161f;
+  --color-surface-overlay: #1c1c27;
+  --color-surface-border: #2a2a3c;
+  --color-surface-border-subtle: #222233;
+
+  /* Text */
+  --color-text-primary: #f0f0f5;
+  --color-text-secondary: #9b9bb0;
+  --color-text-tertiary: #6b6b80;
+  --color-text-muted: #4a4a5e;
+
+  /* Brand */
+  --color-frost-50: #eef4ff;
+  --color-frost-100: #d9e5ff;
+  --color-frost-200: #bbcfff;
+  --color-frost-300: #8db0ff;
+  --color-frost-400: #5888ff;
+  --color-frost-500: #3366ff;
+  --color-frost-600: #1a44f5;
+  --color-frost-700: #1333e1;
+  --color-frost-800: #162bb6;
+  --color-frost-900: #18298f;
+
+  /* Accent */
+  --color-accent-green: #22c55e;
+  --color-accent-green-dim: #16a34a;
+  --color-accent-red: #ef4444;
+  --color-accent-red-dim: #dc2626;
+  --color-accent-yellow: #eab308;
+  --color-accent-blue: #3b82f6;
+  --color-accent-blue-dim: #2563eb;
+  --color-accent-gray: #6b7280;
+  --color-accent-purple: #a855f7;
+
+  /* Animations */
+  --animate-pulse-slow: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #111118; }
+::-webkit-scrollbar-thumb { background: #2a2a3c; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a4c; }
+
+/* Badge pulse animation */
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 4px rgba(59, 130, 246, 0.1);
+}
+.glow-green {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.15), 0 0 4px rgba(34, 197, 94, 0.1);
+}
+
+/* Tab styles */
+.tab-active {
+  border-bottom: 2px solid #3b82f6;
+  color: #f0f0f5;
+}
+.tab-inactive {
+  border-bottom: 2px solid transparent;
+  color: #6b6b80;
+}
+.tab-inactive:hover {
+  color: #9b9bb0;
+  border-bottom-color: #2a2a3c;
+}
+
+/* Selected row highlight */
+.row-selected {
+  background-color: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid #3b82f6;
+}
+
+/* Copy button interaction */
+.copy-btn:active {
+  transform: scale(0.95);
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  animation: spin 0.6s linear infinite;
 }
