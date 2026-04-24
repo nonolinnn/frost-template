@@ -283,7 +283,57 @@
   - Explorer URL 同時支援 API 回傳的 explorer_url 和 client-side 用 tx_signature 自行組裝，做了
   fallback 處理
 
-  ---
+---
+
+### 後端錢包衍生與簽名實作（fr-005 + fr-006）— 2026-04-23
+
+  **問題：** 需要實作兩個緊密相關的功能：(1) 從 DKG 產生的共享公鑰衍生 Solana 錢包地址，(2)
+  用衍生的子金鑰份額完成 FROST 門檻簽名並廣播到 Solana Devnet。這兩個 PRD 合併成一次 dispatch 以節省
+  token。
+
+  **AI 互動：** 把 fr-005 和 fr-006 合併派給同一個後端
+  agent，先做錢包衍生再做簽名。這是策略性決定——兩個都是密碼學邏輯、都在同一個 crate、fr-006 直接依賴
+  fr-005 的衍生模組，合併省一次 agent 啟動成本。
+
+  **AI 產出的內容：**
+
+  *fr-005 — 錢包衍生：*
+  - Coordinator 端 derivation 模組：FROST VerifyingKey → hd-wallet ExtendedPublicKey 橋接
+  - Node 端 derivation 模組：子金鑰份額衍生（給簽名用）
+  - 三個 wallet API endpoint 完整實作
+
+  *fr-006 — 簽名與廣播：*
+  - Coordinator signing routes 全部實作（992 行，5 個 handler）
+  - Solana 交易構建、FROST 簽名注入、RPC 廣播、非同步確認 polling
+
+  **我的審查判斷：**
+  - 我要求 AI 用白話把錢包衍生 → 簽名 →
+  廣播的完整資料流走一遍，因為我對密碼學底層不熟，需要先理解整體流程才能判斷實作是否合理
+  - 確認了 non-hardened derivation 的關鍵特性：Coordinator 只用公開資料就能衍生錢包地址，不需要問
+  Node。但簽名時 Node 各自從私鑰份額衍生子份額，數學上保證對應同一把子公鑰
+  - 確認了簽名流程的安全邊界：tx message 只建一次存 DB（確保兩個 Node 簽的是同一份資料）、nonce
+  用完即刪、Coordinator 全程只碰公開資料
+  - 確認了 `send_transaction` vs `send_and_confirm_transaction` 的選擇合理——FROST
+  預簽的交易不能重新簽名，所以不能用後者，改用前者加背景 polling
+  - 這是我第一次理解到：門檻簽名產出的簽名跟普通 Ed25519 簽名完全一樣，鏈上驗證者看不出差別。這代表
+  FROST 不需要鏈的特殊支援
+
+  **修正過程：**
+  - Agent 第一次 dispatch 撞 rate limit，fr-005 做完但 fr-006 的 coordinator 端還是 501 stub。重新
+  dispatch 時只指派剩餘的 coordinator signing 邏輯，避免重做已完成的工作。這是 token
+  預算管理的實戰經驗——中斷後要精確評估進度再決定重派範圍
+
+  **我學到的：**
+  - FROST 和 hd-wallet 底層都用 curve25519-dalek，但 byte order 不同（FROST/dalek 是
+  little-endian，generic-ec 是 big-endian）。跨函式庫轉換需要 byte reversal
+  - FROST 的 `SigningShare::to_scalar()` 是 `pub(crate)`，不能直接存取內部 scalar。用 serde
+  序列化→反序列化繞過這個限制
+  - `send_and_confirm_transaction` 在 FROST 預簽場景不能用，因為它會嘗試重新簽名。必須用
+  `send_transaction` + 自己 polling 確認狀態
+  - solana-sdk v3 做了 breaking change，移除了 `system_instruction` module
+
+---
+
 
 ## 持續記錄的模板
 

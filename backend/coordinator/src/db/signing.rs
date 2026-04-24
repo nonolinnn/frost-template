@@ -170,6 +170,29 @@ pub async fn update_signing_request_status(
     Ok(())
 }
 
+/// Store the serialized transaction message on a signing request.
+///
+/// Called before Round 2 so that the same message bytes are used
+/// consistently across all nodes and for aggregation.
+pub async fn update_signing_request_tx_message(
+    pool: &PgPool,
+    id: Uuid,
+    tx_message: &[u8],
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        UPDATE signing_requests
+        SET tx_message = $2
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .bind(tx_message)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Update signing request with transaction signature after broadcast.
 pub async fn update_signing_request_tx(
     pool: &PgPool,
