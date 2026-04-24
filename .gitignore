@@ -1,4 +1,7 @@
 /frontend/.next
 /frontend/node_modules
 /backend/**/target
-.env
+
+# local env files
+.env*
+!.env.example

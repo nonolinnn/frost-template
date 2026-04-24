@@ -43,12 +43,16 @@ transactions
 # Clone and start
 git clone <https://github.com/nonolinnn/frost-template>
 cd frost-template
+cp .env.example .env
 docker compose up --build
 ```
 
 Wait for all services to become healthy, then open **http://localhost:3000**.
 
 > First build takes several minutes (Rust compilation). Subsequent starts are cached.
+>
+> If `.env` is missing, Docker Compose still boots the demo with the default values
+> defined in `docker-compose.yml`.
 
 ## Usage Guide
 
@@ -94,6 +98,8 @@ Copy and customize if needed:
 ```bash
 cp .env.example .env
 ```
+
+Local `.env` files are ignored by git and excluded from Docker build context.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

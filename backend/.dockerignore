@@ -4,3 +4,4 @@ target/
 Dockerfile
 Dockerfile.dev
 .dockerignore
+.env*
