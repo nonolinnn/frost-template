@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FROST TSS Wallet — UI Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: {
+              DEFAULT: '#111118',
+              raised: '#16161f',
+              overlay: '#1c1c27',
+              border: '#2a2a3c',
+              'border-subtle': '#222233',
+            },
+            frost: {
+              50: '#eef4ff',
+              100: '#d9e5ff',
+              200: '#bbcfff',
+              300: '#8db0ff',
+              400: '#5888ff',
+              500: '#3366ff',
+              600: '#1a44f5',
+              700: '#1333e1',
+              800: '#162bb6',
+              900: '#18298f',
+            },
+            accent: {
+              green: '#22c55e',
+              'green-dim': '#16a34a',
+              red: '#ef4444',
+              'red-dim': '#dc2626',
+              yellow: '#eab308',
+              blue: '#3b82f6',
+              'blue-dim': '#2563eb',
+              gray: '#6b7280',
+              purple: '#a855f7',
+            },
+            text: {
+              primary: '#f0f0f5',
+              secondary: '#9b9bb0',
+              tertiary: '#6b6b80',
+              muted: '#4a4a5e',
+            },
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0a0a10;
+      color: #f0f0f5;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111118; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3c; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a3a4c; }
+
+    /* Pulse animation for in-progress badges */
+    @keyframes badge-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .badge-pulse {
+      animation: badge-pulse 2s ease-in-out infinite;
+    }
+
+    /* Subtle glow for active elements */
+    .glow-blue {
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+    .glow-green {
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.15), 0 0 4px rgba(34, 197, 94, 0.1);
+    }
+
+    /* Tab underline transition */
+    .tab-active {
+      border-bottom: 2px solid #3b82f6;
+      color: #f0f0f5;
+    }
+    .tab-inactive {
+      border-bottom: 2px solid transparent;
+      color: #6b6b80;
+    }
+    .tab-inactive:hover {
+      color: #9b9bb0;
+      border-bottom-color: #2a2a3c;
+    }
+
+    /* Selected row highlight */
+    .row-selected {
+      background-color: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid #3b82f6;
+    }
+
+    /* Request list item */
+    .request-item {
+      transition: background-color 0.15s ease;
+    }
+    .request-item:hover {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+    .request-item-active {
+      background-color: rgba(59, 130, 246, 0.06);
+      border-left: 3px solid #3b82f6;
+    }
+
+    /* Progress bar segments */
+    .progress-segment {
+      transition: background-color 0.3s ease;
+    }
+
+    /* Tooltip for copy buttons */
+    .copy-btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased">
+
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-50 border-b border-surface-border bg-surface/80 backdrop-blur-xl">
+    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
+      <!-- Logo / Title -->
+      <div class="flex items-center gap-3">
+        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-frost-600">
+          <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </div>
+        <span class="text-base font-semibold tracking-tight text-text-primary">FROST TSS Wallet</span>
+        <span class="ml-1 rounded bg-surface-overlay px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary">DEMO</span>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="flex h-full items-center gap-1">
+        <button onclick="switchTab('dkg')" id="tab-dkg" class="tab-active flex h-full items-center px-4 text-sm font-medium transition-colors">
+          DKG
+        </button>
+        <button onclick="switchTab('wallets')" id="tab-wallets" class="tab-inactive flex h-full items-center px-4 text-sm font-medium transition-colors">
+          Wallets
+        </button>
+        <button onclick="switchTab('signing')" id="tab-signing" class="tab-inactive flex h-full items-center px-4 text-sm font-medium transition-colors">
+          Signing
+        </button>
+      </nav>
+
+      <!-- Right side: network indicator -->
+      <div class="flex items-center gap-2">
+        <div class="h-2 w-2 rounded-full bg-accent-green"></div>
+        <span class="text-xs text-text-secondary">Devnet</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="mx-auto max-w-7xl px-6 py-8">
+
+    <!-- ============================================================ -->
+    <!-- DKG TAB -->
+    <!-- ============================================================ -->
+    <section id="panel-dkg" class="space-y-6">
+
+      <!-- Page Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-text-primary">Distributed Key Generation</h1>
+          <p class="mt-1 text-sm text-text-secondary">Generate a shared FROST key pair across two nodes using a 3-round protocol.</p>
+        </div>
+        <button class="rounded-lg bg-frost-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-frost-700 focus:outline-none focus:ring-2 focus:ring-frost-500 focus:ring-offset-2 focus:ring-offset-surface">
+          Start New DKG
+        </button>
+      </div>
+
+      <!-- Overall Progress Bar -->
+      <div class="rounded-xl border border-surface-border bg-surface-raised p-5">
+        <div class="mb-3 flex items-center justify-between">
+          <span class="text-sm font-medium text-text-secondary">Overall Progress</span>
+          <span class="text-sm font-medium text-text-primary">4 <span class="text-text-tertiary">/ 6 steps</span></span>
+        </div>
+        <div class="flex gap-1.5">
+          <div class="progress-segment h-2 flex-1 rounded-full bg-accent-green"></div>
+          <div class="progress-segment h-2 flex-1 rounded-full bg-accent-green"></div>
+          <div class="progress-segment h-2 flex-1 rounded-full bg-accent-green"></div>
+          <div class="progress-segment h-2 flex-1 rounded-full bg-accent-green"></div>
+          <div class="progress-segment h-2 flex-1 rounded-full bg-accent-blue badge-pulse"></div>
+          <div class="progress-segment h-2 flex-1 rounded-full bg-surface-overlay"></div>
+        </div>
+      </div>
+
+      <!-- Node Panels -->
+      <div class="grid grid-cols-2 gap-6">
+
+        <!-- Node A -->
+        <div class="rounded-xl border border-surface-border bg-surface-raised p-6">
+          <div class="mb-5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-frost-600/15 text-frost-400">
+                <span class="text-sm font-semibold">A</span>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold text-text-primary">Node A</h2>
+                <p class="text-xs text-text-tertiary">Participant 1</p>
+              </div>
+            </div>
+            <span class="inline-flex items-center rounded-full bg-accent-green/10 px-2.5 py-0.5 text-xs font-medium text-accent-green">
+              2/3 complete
+            </span>
+          </div>
+
+          <div class="space-y-3">
+            <!-- Round 1 - Complete -->
+            <div class="flex items-center justify-between rounded-lg border border-surface-border-subtle bg-surface p-4">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-accent-green/15">
+                  <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 1</p>
+                  <p class="text-xs text-text-tertiary">Commitments</p>
+                </div>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-accent-green/10 px-2 py-0.5 text-[11px] font-medium text-accent-green">Complete</span>
+            </div>
+
+            <!-- Round 2 - Complete -->
+            <div class="flex items-center justify-between rounded-lg border border-surface-border-subtle bg-surface p-4">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-accent-green/15">
+                  <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 2</p>
+                  <p class="text-xs text-text-tertiary">Secret Shares</p>
+                </div>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-accent-green/10 px-2 py-0.5 text-[11px] font-medium text-accent-green">Complete</span>
+            </div>
+
+            <!-- Round 3 - Waiting -->
+            <div class="flex items-center justify-between rounded-lg border border-surface-border-subtle bg-surface p-4">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-surface-overlay">
+                  <div class="h-2 w-2 rounded-full bg-text-muted"></div>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 3</p>
+                  <p class="text-xs text-text-tertiary">Finalize</p>
+                </div>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-surface-overlay px-2 py-0.5 text-[11px] font-medium text-text-muted">Waiting</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Node B -->
+        <div class="rounded-xl border border-surface-border bg-surface-raised p-6">
+          <div class="mb-5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-600/15 text-purple-400">
+                <span class="text-sm font-semibold">B</span>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold text-text-primary">Node B</h2>
+                <p class="text-xs text-text-tertiary">Participant 2</p>
+              </div>
+            </div>
+            <span class="inline-flex items-center badge-pulse rounded-full bg-accent-blue/10 px-2.5 py-0.5 text-xs font-medium text-accent-blue">
+              In Progress
+            </span>
+          </div>
+
+          <div class="space-y-3">
+            <!-- Round 1 - Complete -->
+            <div class="flex items-center justify-between rounded-lg border border-surface-border-subtle bg-surface p-4">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-accent-green/15">
+                  <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 1</p>
+                  <p class="text-xs text-text-tertiary">Commitments</p>
+                </div>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-accent-green/10 px-2 py-0.5 text-[11px] font-medium text-accent-green">Complete</span>
+            </div>
+
+            <!-- Round 2 - In Progress -->
+            <div class="flex items-center justify-between rounded-lg border border-accent-blue/30 bg-accent-blue/5 p-4 glow-blue">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-accent-blue/20 badge-pulse">
+                  <div class="h-2 w-2 rounded-full bg-accent-blue"></div>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 2</p>
+                  <p class="text-xs text-text-secondary">Secret Shares</p>
+                </div>
+              </div>
+              <button class="rounded-lg bg-frost-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-frost-700">
+                Execute Round 2
+              </button>
+            </div>
+
+            <!-- Round 3 - Waiting -->
+            <div class="flex items-center justify-between rounded-lg border border-surface-border-subtle bg-surface p-4">
+              <div class="flex items-center gap-3">
+                <div class="flex h-6 w-6 items-center justify-center rounded-full bg-surface-overlay">
+                  <div class="h-2 w-2 rounded-full bg-text-muted"></div>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-text-primary">Round 3</p>
+                  <p class="text-xs text-text-tertiary">Finalize</p>
+                </div>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-surface-overlay px-2 py-0.5 text-[11px] font-medium text-text-muted">Waiting</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Public Key (shown as if DKG were partially complete — dimmed state) -->
+      <div class="rounded-xl border border-dashed border-surface-border bg-surface-raised/50 p-6">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <svg class="h-5 w-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+            <div>
+              <p class="text-sm font-medium text-text-tertiary">Master Public Key</p>
+              <p class="text-xs text-text-muted">Appears after DKG completes successfully</p>
+            </div>
+          </div>
+          <span class="inline-flex items-center rounded-full bg-surface-overlay px-2 py-0.5 text-[11px] font-medium text-text-muted">Pending</span>
+        </div>
+      </div>
+
+      <!-- Master Public Key (complete state - shown below for reference) -->
+      <div class="rounded-xl border border-accent-green/20 bg-surface-raised p-6 glow-green">
+        <div class="mb-3 flex items-center gap-2">
+          <svg class="h-4 w-4 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          <p class="text-sm font-medium text-accent-green">Master Public Key (DKG Complete)</p>
+        </div>
+        <div class="flex items-center justify-between rounded-lg border border-surface-border bg-surface px-4 py-3">
+          <code class="font-mono text-sm text-text-primary">GkXn8bE7Y4pLqR9mN2jKv5sW6tHd3cFxU1aZ0yBw7bQ2</code>
+          <button class="copy-btn ml-3 rounded-md p-1.5 text-text-tertiary transition-colors hover:bg-surface-overlay hover:text-text-secondary" title="Copy to clipboard">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- WALLETS TAB -->
+    <!-- ============================================================ -->
+    <section id="panel-wallets" class="hidden space-y-6">
+
+      <!-- Page Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-text-primary">Wallet Derivation</h1>
+          <p class="mt-1 text-sm text-text-secondary">Derive Solana wallets from the FROST master key. Select a sender wallet for signing transactions.</p>
+        </div>
+        <button class="flex items-center gap-2 rounded-lg bg-frost-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-frost-700 focus:outline-none focus:ring-2 focus:ring-frost-500 focus:ring-offset-2 focus:ring-offset-surface">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Create Wallet
+        </button>
+      </div>
+
+      <!-- Wallet Table -->
+      <div class="overflow-hidden rounded-xl border border-surface-border bg-surface-raised">
+        <!-- Table Header -->
+        <div class="grid grid-cols-[60px_1fr_140px_140px] border-b border-surface-border px-6 py-3">
+          <span class="text-xs font-medium uppercase tracking-wider text-text-muted">#</span>
+          <span class="text-xs font-medium uppercase tracking-wider text-text-muted">Address</span>
+          <span class="text-xs font-medium uppercase tracking-wider text-text-muted">Balance</span>
+          <span class="text-right text-xs font-medium uppercase tracking-wider text-text-muted">Action</span>
+        </div>
+
+        <!-- Row 0 - Selected -->
+        <div class="row-selected grid grid-cols-[60px_1fr_140px_140px] items-center border-b border-surface-border-subtle px-6 py-4">
+          <span class="text-sm font-medium text-text-primary">0</span>
+          <div class="flex items-center gap-2">
+            <code class="font-mono text-sm text-text-primary">GkXn8bE7...w7bQ2</code>
+            <button class="copy-btn rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-secondary" title="Copy address">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+          <span class="font-mono text-sm text-text-primary">2.450 SOL</span>
+          <div class="flex justify-end">
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-frost-600/15 px-3 py-1 text-xs font-medium text-frost-400">
+              <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></svg>
+              Selected
+            </span>
+          </div>
+        </div>
+
+        <!-- Row 1 -->
+        <div class="grid grid-cols-[60px_1fr_140px_140px] items-center border-b border-surface-border-subtle px-6 py-4 transition-colors hover:bg-surface-overlay/30">
+          <span class="text-sm font-medium text-text-primary">1</span>
+          <div class="flex items-center gap-2">
+            <code class="font-mono text-sm text-text-primary">Hj8mPq4R...s4cR9</code>
+            <button class="copy-btn rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-secondary" title="Copy address">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+          <span class="font-mono text-sm text-text-secondary">0.000 SOL</span>
+          <div class="flex justify-end">
+            <button class="rounded-full border border-surface-border px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:border-frost-600/50 hover:text-frost-400">
+              Select
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="grid grid-cols-[60px_1fr_140px_140px] items-center border-b border-surface-border-subtle px-6 py-4 transition-colors hover:bg-surface-overlay/30">
+          <span class="text-sm font-medium text-text-primary">2</span>
+          <div class="flex items-center gap-2">
+            <code class="font-mono text-sm text-text-primary">Bv3kLm9D...x9dT1</code>
+            <button class="copy-btn rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-secondary" title="Copy address">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+          <span class="font-mono text-sm text-text-primary">1.200 SOL</span>
+          <div class="flex justify-end">
+            <button class="rounded-full border border-surface-border px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:border-frost-600/50 hover:text-frost-400">
+              Select
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 3 -->
+        <div class="grid grid-cols-[60px_1fr_140px_140px] items-center px-6 py-4 transition-colors hover:bg-surface-overlay/30">
+          <span class="text-sm font-medium text-text-primary">3</span>
+          <div class="flex items-center gap-2">
+            <code class="font-mono text-sm text-text-primary">9xF2Wn5J...k7eP4</code>
+            <button class="copy-btn rounded-md p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-secondary" title="Copy address">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+          <span class="font-mono text-sm text-text-secondary">0.500 SOL</span>
+          <div class="flex justify-end">
+            <button class="rounded-full border border-surface-border px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:border-frost-600/50 hover:text-frost-400">
+              Select
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selected Sender Summary -->
+      <div class="flex items-center gap-3 rounded-xl border border-frost-600/20 bg-frost-600/5 px-5 py-3.5">
+        <svg class="h-4 w-4 text-frost-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        <span class="text-sm text-text-secondary">Selected Sender:</span>
+        <span class="text-sm font-medium text-text-primary">Wallet #0</span>
+        <code class="font-mono text-sm text-frost-400">GkXn8bE7...w7bQ2</code>
+        <span class="font-mono text-sm text-text-secondary">(2.450 SOL)</span>
+      </div>
+
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SIGNING TAB -->
+    <!-- ============================================================ -->
+    <section id="panel-signing" class="hidden space-y-6">
+
+      <!-- Page Header -->
+      <div>
+        <h1 class="text-xl font-semibold text-text-primary">Signing & Transactions</h1>
+        <p class="mt-1 text-sm text-text-secondary">Create signing requests, execute FROST signing rounds, and broadcast transactions to Solana.</p>
+      </div>
+
+      <!-- Create Signing Request Form -->
+      <div class="rounded-xl border border-surface-border bg-surface-raised p-6">
+        <h2 class="mb-4 text-sm font-semibold text-text-primary">Create Signing Request</h2>
+        <div class="grid grid-cols-[1fr_1fr_auto] gap-4">
+          <!-- Sender -->
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-text-secondary">Sender Wallet</label>
+            <div class="flex items-center rounded-lg border border-surface-border bg-surface px-3 py-2.5">
+              <span class="text-sm text-text-primary">Wallet #0</span>
+              <span class="mx-2 text-text-muted">-</span>
+              <code class="font-mono text-xs text-text-secondary">GkXn8bE7...w7bQ2</code>
+              <svg class="ml-auto h-4 w-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
+          <!-- Recipient -->
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-text-secondary">Recipient Address</label>
+            <input type="text" placeholder="Enter Solana address..." class="w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 font-mono text-sm text-text-primary placeholder-text-muted outline-none transition-colors focus:border-frost-600/50 focus:ring-1 focus:ring-frost-600/30" value="Hj8mPq4R...s4cR9">
+          </div>
+          <!-- Amount + Submit -->
+          <div class="flex items-end gap-3">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-text-secondary">Amount</label>
+              <div class="flex items-center rounded-lg border border-surface-border bg-surface">
+                <input type="text" placeholder="0.00" class="w-24 bg-transparent px-3 py-2.5 text-sm text-text-primary outline-none" value="0.5">
+                <span class="pr-3 text-xs font-medium text-text-muted">SOL</span>
+              </div>
+            </div>
+            <button class="whitespace-nowrap rounded-lg bg-frost-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-frost-700">
+              Create Request
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split View: Request List + Detail -->
+      <div class="grid grid-cols-[340px_1fr] gap-6">
+
+        <!-- Left: Request List -->
+        <div class="rounded-xl border border-surface-border bg-surface-raised">
+          <div class="border-b border-surface-border px-4 py-3">
+            <span class="text-xs font-medium uppercase tracking-wider text-text-muted">Signing Requests</span>
+          </div>
+          <div class="divide-y divide-surface-border-subtle">
+
+            <!-- Request #1 - Active / Signing -->
+            <div class="request-item request-item-active cursor-pointer px-4 py-3.5">
+              <div class="mb-1.5 flex items-center justify-between">
+                <span class="text-sm font-medium text-text-primary">#1 &mdash; 0.500 SOL</span>
+                <span class="inline-flex items-center rounded-full bg-accent-blue/10 px-2 py-0.5 text-[10px] font-medium text-accent-blue badge-pulse">Signing</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-text-tertiary">
+                <code class="font-mono">GkXn...bQ2</code>
+                <svg class="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                <code class="font-mono">Hj8m...cR9</code>
+                <span class="ml-auto text-text-muted">14:23</span>
+              </div>
+            </div>
+
+            <!-- Request #2 - Confirmed -->
+            <div class="request-item cursor-pointer px-4 py-3.5">
+              <div class="mb-1.5 flex items-center justify-between">
+                <span class="text-sm font-medium text-text-primary">#2 &mdash; 1.000 SOL</span>
+                <span class="inline-flex items-center rounded-full bg-accent-green/10 px-2 py-0.5 text-[10px] font-medium text-accent-green">Confirmed</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-text-tertiary">
+                <code class="font-mono">GkXn...bQ2</code>
+                <svg class="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                <code class="font-mono">Bv3k...dT1</code>
+                <span class="ml-auto text-text-muted">14:10</span>
+              </div>
+            </div>
+
+            <!-- Request #3 - Pending -->
+            <div class="request-item cursor-pointer px-4 py-3.5">
+              <div class="mb-1.5 flex items-center justify-between">
+                <span class="text-sm font-medium text-text-primary">#3 &mdash; 0.200 SOL</span>
+                <span class="inline-flex items-center rounded-full bg-surface-overlay px-2 py-0.5 text-[10px] font-medium text-text-muted">Pending</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-text-tertiary">
+                <code class="font-mono">GkXn...bQ2</code>
+                <svg class="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                <code class="font-mono">9xF2...eP4</code>
+                <span class="ml-auto text-text-muted">14:05</span>
+              </div>
+            </div>
+
+            <!-- Request #4 - Error -->
+            <div class="request-item cursor-pointer px-4 py-3.5">
+              <div class="mb-1.5 flex items-center justify-between">
+                <span class="text-sm font-medium text-text-primary">#4 &mdash; 5.000 SOL</span>
+                <span class="inline-flex items-center rounded-full bg-accent-red/10 px-2 py-0.5 text-[10px] font-medium text-accent-red">Failed</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs text-text-tertiary">
+                <code class="font-mono">GkXn...bQ2</code>
+                <svg class="h-3 w-3 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                <code class="font-mono">Dm7q...rJ6</code>
+                <span class="ml-auto text-text-muted">13:48</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right: Request Detail -->
+        <div class="rounded-xl border border-surface-border bg-surface-raised p-6">
+
+          <!-- Detail Header -->
+          <div class="mb-6 flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-semibold text-text-primary">Request #1</h2>
+              <p class="mt-0.5 text-sm text-text-secondary">0.500 SOL transfer</p>
+            </div>
+            <span class="inline-flex items-center rounded-full bg-accent-blue/10 px-2.5 py-0.5 text-xs font-medium text-accent-blue badge-pulse">Signing in Progress</span>
+          </div>
+
+          <!-- Transfer Summary -->
+          <div class="mb-6 flex items-center gap-4 rounded-lg border border-surface-border-subtle bg-surface px-4 py-3">
+            <div class="text-center">
+              <p class="text-[10px] uppercase tracking-wider text-text-muted">From</p>
+              <code class="font-mono text-xs text-text-primary">GkXn8bE7...w7bQ2</code>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="h-px w-8 bg-surface-border"></div>
+              <span class="rounded-md bg-frost-600/10 px-2 py-0.5 font-mono text-xs font-medium text-frost-400">0.500 SOL</span>
+              <div class="h-px w-8 bg-surface-border"></div>
+              <svg class="h-4 w-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] uppercase tracking-wider text-text-muted">To</p>
+              <code class="font-mono text-xs text-text-primary">Hj8mPq4R...s4cR9</code>
+            </div>
+          </div>
+
+          <!-- Status Timeline -->
+          <div class="mb-6">
+            <h3 class="mb-3 text-xs font-medium uppercase tracking-wider text-text-muted">Status Timeline</h3>
+            <div class="flex items-center gap-0">
+              <!-- Step 1: Pending - Complete -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-accent-green/15">
+                  <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="mt-1.5 text-[10px] text-accent-green">Pending</span>
+              </div>
+              <div class="mx-1 h-0.5 flex-1 bg-accent-green"></div>
+
+              <!-- Step 2: Round 1 - Complete -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-accent-green/15">
+                  <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="mt-1.5 text-[10px] text-accent-green">Round 1</span>
+              </div>
+              <div class="mx-1 h-0.5 flex-1 bg-gradient-to-r from-accent-green to-accent-blue"></div>
+
+              <!-- Step 3: Round 2 - In Progress -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-accent-blue/20 badge-pulse">
+                  <div class="h-2.5 w-2.5 rounded-full bg-accent-blue"></div>
+                </div>
+                <span class="mt-1.5 text-[10px] font-medium text-accent-blue">Round 2</span>
+              </div>
+              <div class="mx-1 h-0.5 flex-1 bg-surface-border"></div>
+
+              <!-- Step 4: Aggregating - Waiting -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-overlay">
+                  <div class="h-2 w-2 rounded-full bg-text-muted"></div>
+                </div>
+                <span class="mt-1.5 text-[10px] text-text-muted">Aggregate</span>
+              </div>
+              <div class="mx-1 h-0.5 flex-1 bg-surface-border"></div>
+
+              <!-- Step 5: Broadcasted - Waiting -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-overlay">
+                  <div class="h-2 w-2 rounded-full bg-text-muted"></div>
+                </div>
+                <span class="mt-1.5 text-[10px] text-text-muted">Broadcast</span>
+              </div>
+              <div class="mx-1 h-0.5 flex-1 bg-surface-border"></div>
+
+              <!-- Step 6: Confirmed - Waiting -->
+              <div class="flex flex-col items-center">
+                <div class="flex h-7 w-7 items-center justify-center rounded-full bg-surface-overlay">
+                  <div class="h-2 w-2 rounded-full bg-text-muted"></div>
+                </div>
+                <span class="mt-1.5 text-[10px] text-text-muted">Confirmed</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Node Signing Panels -->
+          <div class="mb-6 grid grid-cols-2 gap-4">
+
+            <!-- Node A - Signing -->
+            <div class="rounded-lg border border-surface-border bg-surface p-4">
+              <div class="mb-3 flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-md bg-frost-600/15 text-frost-400">
+                  <span class="text-xs font-semibold">A</span>
+                </div>
+                <span class="text-sm font-medium text-text-primary">Node A</span>
+              </div>
+              <div class="space-y-2">
+                <!-- Round 1 - Complete -->
+                <div class="flex items-center justify-between rounded-md bg-surface-raised px-3 py-2">
+                  <div class="flex items-center gap-2">
+                    <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    <span class="text-xs text-text-primary">Round 1</span>
+                  </div>
+                  <span class="text-[10px] text-accent-green">Done</span>
+                </div>
+                <!-- Round 2 - In Progress, actionable -->
+                <div class="flex items-center justify-between rounded-md border border-accent-blue/30 bg-accent-blue/5 px-3 py-2">
+                  <div class="flex items-center gap-2">
+                    <div class="h-3 w-3 rounded-full bg-accent-blue/30 badge-pulse"><div class="mx-auto mt-[3px] h-1.5 w-1.5 rounded-full bg-accent-blue"></div></div>
+                    <span class="text-xs text-text-primary">Round 2</span>
+                  </div>
+                  <button class="rounded-md bg-frost-600 px-2.5 py-1 text-[10px] font-medium text-white hover:bg-frost-700">Execute</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Node B - Signing -->
+            <div class="rounded-lg border border-surface-border bg-surface p-4">
+              <div class="mb-3 flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-md bg-purple-600/15 text-purple-400">
+                  <span class="text-xs font-semibold">B</span>
+                </div>
+                <span class="text-sm font-medium text-text-primary">Node B</span>
+              </div>
+              <div class="space-y-2">
+                <!-- Round 1 - Complete -->
+                <div class="flex items-center justify-between rounded-md bg-surface-raised px-3 py-2">
+                  <div class="flex items-center gap-2">
+                    <svg class="h-3.5 w-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    <span class="text-xs text-text-primary">Round 1</span>
+                  </div>
+                  <span class="text-[10px] text-accent-green">Done</span>
+                </div>
+                <!-- Round 2 - Waiting -->
+                <div class="flex items-center justify-between rounded-md bg-surface-raised px-3 py-2">
+                  <div class="flex items-center gap-2">
+                    <div class="h-3 w-3 rounded-full bg-surface-overlay"><div class="mx-auto mt-[4px] h-1.5 w-1.5 rounded-full bg-text-muted"></div></div>
+                    <span class="text-xs text-text-secondary">Round 2</span>
+                  </div>
+                  <span class="text-[10px] text-text-muted">Waiting</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aggregate & Broadcast -->
+          <div class="flex items-center gap-4">
+            <button disabled class="flex-1 rounded-lg border border-surface-border bg-surface px-4 py-2.5 text-sm font-medium text-text-muted cursor-not-allowed">
+              Aggregate & Broadcast
+            </button>
+          </div>
+
+          <!-- Transaction Result (shown for reference — normally hidden until broadcast) -->
+          <div class="mt-4 rounded-lg border border-accent-green/20 bg-accent-green/5 p-4">
+            <div class="mb-2 flex items-center gap-2">
+              <svg class="h-4 w-4 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span class="text-sm font-medium text-accent-green">Transaction Broadcasted</span>
+            </div>
+            <div class="flex items-center justify-between rounded-md border border-surface-border-subtle bg-surface px-3 py-2">
+              <code class="font-mono text-xs text-text-primary">4sGjkL8mNpQr2vWx5yBz7cDf9eAhJ1kT3uRw6nHs...</code>
+              <a href="#" class="flex items-center gap-1.5 text-xs font-medium text-frost-400 hover:text-frost-300">
+                View on Explorer
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-surface-border-subtle">
+    <div class="mx-auto flex h-10 max-w-7xl items-center justify-between px-6">
+      <span class="text-[11px] text-text-muted">FROST Threshold Signature Scheme Demo</span>
+      <span class="text-[11px] text-text-muted">Solana Devnet</span>
+    </div>
+  </footer>
+
+  <!-- Tab Switching Script -->
+  <script>
+    function switchTab(tab) {
+      // Hide all panels
+      document.querySelectorAll('[id^="panel-"]').forEach(el => el.classList.add('hidden'));
+      // Deactivate all tabs
+      document.querySelectorAll('[id^="tab-"]').forEach(el => {
+        el.classList.remove('tab-active');
+        el.classList.add('tab-inactive');
+      });
+      // Show selected panel and activate tab
+      document.getElementById('panel-' + tab).classList.remove('hidden');
+      const tabBtn = document.getElementById('tab-' + tab);
+      tabBtn.classList.remove('tab-inactive');
+      tabBtn.classList.add('tab-active');
+    }
+  </script>
+
+</body>
+</html>

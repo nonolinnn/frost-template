@@ -1,0 +1,23 @@
+# ------------------------------------------------------------------
+# Development Dockerfile for backend services
+# Installs cargo-watch for hot-reload during development
+# ------------------------------------------------------------------
+
+FROM rust:1.94.0-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-watch --locked
+
+WORKDIR /app
+
+COPY . .
+
+# Pre-fetch dependencies
+RUN cargo fetch
+
+EXPOSE 8080 8081 8082
+
+CMD ["cargo", "watch", "-x", "run"]

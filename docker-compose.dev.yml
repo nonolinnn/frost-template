@@ -1,0 +1,77 @@
+# Development overrides — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Provides hot-reload for frontend and cargo-watch for backend services.
+
+services:
+  # ---------- Coordinator (dev: cargo-watch) ----------
+  coordinator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      args:
+        BUILD_BIN: coordinator
+    volumes:
+      - ./backend:/app
+      # Preserve cargo registry cache across rebuilds
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - coordinator-target:/app/target
+    environment:
+      RUST_LOG: debug
+    command: >
+      cargo watch -x 'run -p coordinator'
+
+  # ---------- TSS Node A (dev: cargo-watch) ----------
+  node-a:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      args:
+        BUILD_BIN: tss-node
+    volumes:
+      - ./backend:/app
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - node-a-target:/app/target
+    environment:
+      RUST_LOG: debug
+    command: >
+      cargo watch -x 'run -p tss-node'
+
+  # ---------- TSS Node B (dev: cargo-watch) ----------
+  node-b:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+      args:
+        BUILD_BIN: tss-node
+    volumes:
+      - ./backend:/app
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - node-b-target:/app/target
+    environment:
+      RUST_LOG: debug
+    command: >
+      cargo watch -x 'run -p tss-node'
+
+  # ---------- Frontend (dev: next dev with hot-reload) ----------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+    command: npm run dev
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  coordinator-target:
+  node-a-target:
+  node-b-target:

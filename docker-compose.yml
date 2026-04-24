@@ -1,0 +1,119 @@
+services:
+  # ---------- PostgreSQL 18 ----------
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-frost}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frost}
+      POSTGRES_DB: ${POSTGRES_DB:-frost}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Coordinator (Rust / axum) ----------
+  coordinator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_BIN: coordinator
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${COORDINATOR_DATABASE_URL:-postgresql://frost:frost@postgres:5432/coordinator_db}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      PORT: "8080"
+      RUST_LOG: info
+    ports:
+      - "${COORDINATOR_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------- TSS Node A ----------
+  node-a:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_BIN: tss-node
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ID: node-a
+      DATABASE_URL: ${NODE_A_DATABASE_URL:-postgresql://frost:frost@postgres:5432/node_a_db}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      PORT: "8081"
+      RUST_LOG: info
+    ports:
+      - "${NODE_A_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------- TSS Node B ----------
+  node-b:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_BIN: tss-node
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ID: node-b
+      DATABASE_URL: ${NODE_B_DATABASE_URL:-postgresql://frost:frost@postgres:5432/node_b_db}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      PORT: "8082"
+      RUST_LOG: info
+    ports:
+      - "${NODE_B_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------- Frontend (Next.js) ----------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_COORDINATOR_URL: http://coordinator:8080
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
