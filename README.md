@@ -6,6 +6,35 @@ A threshold signature scheme (TSS) wallet demo using
 Signatures) on Solana Devnet. Two signer nodes collaboratively generate keys, derive
 wallets, and sign transactions — no single node ever holds the full private key.
 
+
+## Scope and Security Assumptions
+This project is implemented as a single-machine local demo for the FROST interview assignment.
+
+The current implementation prioritizes:
+- correctness of the FROST DKG flow
+- deterministic HD wallet derivation
+- threshold signing across multiple wallet indices
+- Solana Devnet transaction broadcast
+- a clear step-by-step frontend demo experience
+
+It is not intended to be production-ready custody infrastructure.
+
+Current assumptions:
+- all services run on a trusted local machine
+- the Coordinator is trusted to orchestrate the signing flow
+- signer nodes do not independently enforce transaction policy
+- key-share persistence is implemented for demo simplicity, not hardened storage
+
+This tradeoff is intentional for assignment scope: the goal is to demonstrate the protocol flow, state
+transitions, and frontend/backend integration clearly before production hardening.
+
+For production use, the next hardening steps would include:
+- service-to-service authentication and stricter API access control
+- signer-side transaction policy validation
+- encrypted key-share storage and stronger custody design
+- network isolation between coordinator, signer nodes, and database
+- stronger audit trails, rate limiting, and key lifecycle management
+
 ## Architecture
 
 ```

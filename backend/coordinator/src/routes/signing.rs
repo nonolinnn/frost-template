@@ -921,8 +921,39 @@ async fn poll_confirmation(
         match rpc_client.get_signature_statuses(&[sig]) {
             Ok(response) => {
                 if let Some(Some(status)) = response.value.first() {
-                    if status.err.is_none() {
-                        // Transaction confirmed successfully
+                    // 1. Check for on-chain error first
+                    if status.err.is_some() {
+                        let err_msg = format!(
+                            "Transaction failed on-chain: {:?}",
+                            status.err
+                        );
+                        let _ = db::signing::update_signing_request_tx(
+                            &pool,
+                            signing_request_id,
+                            "failed",
+                            Some(tx_signature),
+                            Some(&err_msg),
+                        )
+                        .await;
+                        tracing::error!(
+                            %signing_request_id,
+                            "Transaction failed on Solana: {err_msg}"
+                        );
+                        return;
+                    }
+
+                    // 2. Check confirmation level — only accept confirmed or finalized,
+                    //    not merely processed (which could still be dropped).
+                    let is_confirmed = status.confirmation_status.as_ref().is_some_and(|cs| {
+                        use solana_transaction_status::TransactionConfirmationStatus;
+                        matches!(
+                            cs,
+                            TransactionConfirmationStatus::Confirmed
+                                | TransactionConfirmationStatus::Finalized
+                        )
+                    });
+
+                    if is_confirmed {
                         if let Err(e) = db::signing::update_signing_request_tx(
                             &pool,
                             signing_request_id,
@@ -944,26 +975,9 @@ async fn poll_confirmation(
                             );
                         }
                         return;
-                    } else {
-                        // Transaction failed on-chain
-                        let err_msg = format!(
-                            "Transaction failed on-chain: {:?}",
-                            status.err
-                        );
-                        let _ = db::signing::update_signing_request_tx(
-                            &pool,
-                            signing_request_id,
-                            "failed",
-                            Some(tx_signature),
-                            Some(&err_msg),
-                        )
-                        .await;
-                        tracing::error!(
-                            %signing_request_id,
-                            "Transaction failed on Solana: {err_msg}"
-                        );
-                        return;
                     }
+
+                    // 3. Still at processed level — continue polling
                 }
             }
             Err(e) => {

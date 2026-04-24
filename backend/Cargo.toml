@@ -32,3 +32,4 @@ hex = "0.4"
 curve25519-dalek = { version = "=4.1.3", features = ["rand_core"] }
 bincode = "1.3"
 solana-system-interface = { version = "2.0.0", features = ["bincode"] }
+solana-transaction-status = "3.1"

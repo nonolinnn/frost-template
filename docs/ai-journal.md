@@ -8,6 +8,22 @@
 
 ---
 
+## 開發策略
+
+面對完全陌生的技術領域（FROST 門檻簽名、HD 錢包衍生、Rust/axum、Solana），我採用「快速原型 → 驗證 → 深入理解 → 審查修正」的迭代式開發策略。
+
+核心判斷是：在不理解 FROST 密碼學底層數學的前提下，先讀論文再開始寫是低效的。密碼學論文的抽象描述在沒有具體系統可以對照時很難消化。相反地，先透過 AI 輔助搭建可運行的原型，再藉由實際運行結果反向理解系統行為與密碼學邏輯，是更高效的學習路徑。
+
+具體來說：
+- **Phase 1-3**：AI 輔助實作，每個 PRD 完成後做 review 判斷。在這個階段，我的審查重點是架構決策、資料流正確性和安全邊界——而不是密碼學底層數學。
+- **Phase 4（整合測試）**：親手用 Docker 跑起完整系統、執行 integration test、在 UI 上逐步操作每個 round。這些具體經驗為後續的深入理解提供了錨點。
+- **最終走讀**：系統跑通後，逐檔 code review。從資料庫 schema → 密碼學核心模組 → API 路由 → 前端元件，由底層往上完整走讀。這時候讀程式碼有了「我親手跑過、看過實際行為」的基礎，理解深度遠超單純讀文件。
+- **功能面驗收**：主動比對 assignment 原文，找出潛在風險並做有意識的取捨判斷。
+
+最終的理解深度不是來自「事先讀完文件」，而是來自「實際跑過、debug 過、逐行讀過」的完整經歷。
+
+---
+
 ## 我追蹤的評量標準
 
 | 評量標準 | 狀態 | 備註 |
@@ -15,8 +31,8 @@
 | 未知領域探索 | 已記錄 | 進場時對 Rust/FROST/Solana 零經驗 |
 | 複雜問題拆解 | 已記錄 | 11 個有明確依賴關係的有界 PRD |
 | Prompt 工程與 context 管理 | 已記錄 | 多代理協作，durable context 寫入 AGENTS.md |
-| 修正與 debug | 進行中 | PG 18 volume 問題已記錄；後續還有更多 |
-| 策略取捨與方向判斷 | 已記錄 | REST vs WebSocket、測試策略、審查模式、UI 方向 |
+| 修正與 debug | 已記錄 | PG 18 volume、frontend healthcheck、rate limit 中斷恢復 |
+| 策略取捨與方向判斷 | 已記錄 | REST vs WebSocket、測試策略、審查模式、UI 方向、demo scope 取捨 |
 
 ---
 
@@ -109,13 +125,6 @@
 **AI 產出的內容：**
 - 有 5 個服務的 `docker-compose.yml`
 - 使用 cargo-chef 做依賴層快取的多階段 Rust Dockerfile（讓重複 build 時不必從頭重新編譯所有依賴）
-
-**修正過程 — PostgreSQL 18 資料目錄：**
-- 問題：PostgreSQL 容器一直回報「unhealthy」並崩潰。
-- 如何發現：`docker compose logs postgres` 顯示資料目錄路徑的初始化錯誤。
-- 根本原因：PostgreSQL 18 改變了資料目錄結構。舊路徑是 `/var/lib/postgresql/data`，PostgreSQL 18 使用 `/var/lib/postgresql/<version>/`（例如 `/var/lib/postgresql/18/`）。AI 在 volume mount 中使用了舊路徑，導致容器初始化失敗。
-- 修正：把 `docker-compose.yml` 中的 volume mount 路徑更新為正確的版本化路徑。
-- 教訓：AI 的訓練資料有截止日期。非常近期的軟體版本的 breaking change 可能未被反映。服務在啟動時崩潰，要先讀 log 再假設設定邏輯有問題——實際的錯誤訊息幾乎都比我的初始猜測更具體。
 
 ---
 
@@ -223,196 +232,162 @@
 
 ### 後端 DKG 協議實作（fr-004）— 2026-04-22
 
-  **問題：** 實作 FROST 門檻簽名的核心——分散式金鑰生成（DKG）。兩個 node
-  透過三輪協議協作產生共享金鑰對，任何一方都不持有完整私鑰。這是整個系統密碼學正確性的基礎。
+**問題：** 實作 FROST 門檻簽名的核心——分散式金鑰生成（DKG）。兩個 node 透過三輪協議協作產生共享金鑰對，任何一方都不持有完整私鑰。這是整個系統密碼學正確性的基礎。
 
-  **AI 互動：** 派後端 agent 實作完整的 DKG 三輪流程。給它 frost-ed25519 的 API 範例、API 合約和 DB
-  schema 作為參考。這是 human review PRD——密碼學邏輯我必須自己看懂才能放行。
+**AI 互動：** 派後端 agent 實作完整的 DKG 三輪流程。給它 frost-ed25519 的 API 範例、API 合約和 DB schema 作為參考。這是 human review PRD——密碼學邏輯我必須自己看懂才能放行。
 
-  **AI 產出的內容：**
-  - TSS Node 端三個 round handler（+282 行）：直接調用 `frost_ed25519::keys::dkg::{part1, part2,
-  part3}`
-  - Coordinator 端 DKG 協調邏輯（+475 行）：透過 reqwest proxy 到 node，追蹤 per-node round
-  進度，偵測 DKG 完成
-  - 順便完成了 fr-007 review 時提出的 migration 路徑重構（搬進各 crate 目錄）
+**AI 產出的內容：**
+- TSS Node 端三個 round handler（+282 行）：直接調用 `frost_ed25519::keys::dkg::{part1, part2, part3}`
+- Coordinator 端 DKG 協調邏輯（+475 行）：透過 reqwest proxy 到 node，追蹤 per-node round 進度，偵測 DKG 完成
+- 順便完成了 fr-007 review 時提出的 migration 路徑重構（搬進各 crate 目錄）
 
-  **我的審查判斷：**
-  - 我逐步追蹤了三輪的資料流向：R1 各自產生承諾 → R2 交換承諾後計算加密份額 → R3
-  驗證份額並產生最終金鑰。Coordinator 在每輪都有前置條件檢查（必須雙方都完成上一輪），防止跳步
-  - 確認 KeyPackage（私鑰份額）只存在 node 自己的 DB，Coordinator 只存公開資料（group public key 的
-  Base58 字串）
-  - 確認重複執行防護：每個 node 的每個 round 做過就不能再做
-  - 確認前端 6 個獨立按鈕（2 nodes × 3 rounds）的設計正確反映了協議本質——每個 node
-  各自操作，不存在「同時觸發」的需求。面試官能逐步觀察協議推進
+**我的審查判斷：**
+- 我逐步追蹤了三輪的資料流向：R1 各自產生承諾 → R2 交換承諾後計算加密份額 → R3 驗證份額並產生最終金鑰。Coordinator 在每輪都有前置條件檢查（必須雙方都完成上一輪），防止跳步
+- 確認 KeyPackage（私鑰份額）只存在 node 自己的 DB，Coordinator 只存公開資料（group public key 的 Base58 字串）
+- 確認重複執行防護：每個 node 的每個 round 做過就不能再做
+- 確認前端 6 個獨立按鈕（2 nodes × 3 rounds）的設計正確反映了協議本質——每個 node 各自操作，不存在「同時觸發」的需求。面試官能逐步觀察協議推進
 
-  **我學到的：**
-  - FROST DKG 的三輪本質：Round 1 是承諾（commitment），Round 2 是交換（secret sharing），Round 3
-  是驗證與最終化。每輪都必須雙方完成才能進下一輪，這不是實作上的限制而是密碼學協議本身的要求
-  - `rand::thread_rng()` 在 Rust 中是 `!Send`，不能用在 axum 的 async handler 裡，改用 `OsRng`
-  - FROST `Identifier` 可以從字串確定性衍生（`Identifier::derive()`），不需要手動分配數字 ID
-  - `VerifyingKey::serialize()` 回傳 32-byte compressed Edwards Y 座標，Base58 編碼後直接就是 Solana
-  地址格式
+**我學到的：**
+- FROST DKG 的三輪本質：Round 1 是承諾（commitment），Round 2 是交換（secret sharing），Round 3 是驗證與最終化。每輪都必須雙方完成才能進下一輪，這不是實作上的限制而是密碼學協議本身的要求
+- `rand::thread_rng()` 在 Rust 中是 `!Send`，不能用在 axum 的 async handler 裡，改用 `OsRng`
+- FROST `Identifier` 可以從字串確定性衍生（`Identifier::derive()`），不需要手動分配數字 ID
+- `VerifyingKey::serialize()` 回傳 32-byte compressed Edwards Y 座標，Base58 編碼後直接就是 Solana 地址格式
 
 ---
 
 ### 前端簽名與交易介面（fr-009）— 2026-04-22
 
-  **問題：** 實作 FROST 簽名流程的前端介面。使用者需要能建立簽名請求、逐步觸發每個 Node
-  的兩輪簽名、聚合並廣播到 Solana
-  Devnet，以及追蹤交易狀態直到確認。這是三個核心流程中互動最複雜的一個。
+**問題：** 實作 FROST 簽名流程的前端介面。使用者需要能建立簽名請求、逐步觸發每個 Node 的兩輪簽名、聚合並廣播到 Solana Devnet，以及追蹤交易狀態直到確認。這是三個核心流程中互動最複雜的一個。
 
-  **AI 互動：** 派前端 agent，給它 HTML mockup 的 Signing tab、設計指南和 API 合約。設為
-  self-review，跟 fr-008 一樣的理由——前端配線屬於低風險類別。fr-008 已經建好 tab
-  navigation、設計系統和 API client 基礎，這次只需要填入 Signing tab 的完整內容。
+**AI 互動：** 派前端 agent，給它 HTML mockup 的 Signing tab、設計指南和 API 合約。設為 self-review，跟 fr-008 一樣的理由——前端配線屬於低風險類別。fr-008 已經建好 tab navigation、設計系統和 API client 基礎，這次只需要填入 Signing tab 的完整內容。
 
-  **AI 產出的內容：**
-  - `transactions-panel.tsx` 完整重寫（~550 行）：建立簽名請求表單（錢包下拉選單 + 收款地址 Base58
-  驗證 + 金額輸入）、split-view 版面（左側 request list + 右側 detail panel）、水平 status timeline
-  stepper（6 步驟）、雙 Node panel 各有獨立的 per-round Execute 按鈕、Aggregate & Broadcast
-  按鈕（兩個 node 都完 Round 2 才解鎖）、交易結果卡片附 Solana Explorer 連結
-  - `api.ts` 加入 5 個 signing API functions（createSigningRequest, listSigningRequests,
-  getSigningRequest, executeSigningRound, aggregateAndBroadcast）
-  - `page.tsx` 更新，把 dkgComplete 和 selectedWalletIndex 傳給 TransactionsPanel
+**AI 產出的內容：**
+- `transactions-panel.tsx` 完整重寫（~550 行）：建立簽名請求表單（錢包下拉選單 + 收款地址 Base58 驗證 + 金額輸入）、split-view 版面（左側 request list + 右側 detail panel）、水平 status timeline stepper（6 步驟）、雙 Node panel 各有獨立的 per-round Execute 按鈕、Aggregate & Broadcast 按鈕（兩個 node 都完 Round 2 才解鎖）、交易結果卡片附 Solana Explorer 連結
+- `api.ts` 加入 5 個 signing API functions（createSigningRequest, listSigningRequests, getSigningRequest, executeSigningRound, aggregateAndBroadcast）
+- `page.tsx` 更新，把 dkgComplete 和 selectedWalletIndex 傳給 TransactionsPanel
 
-  **我觀察到的：**
-  - 簽名流程只有 2 rounds per node（不像 DKG 有 3 rounds），但多了一個 Aggregate & Broadcast
-  步驟作為獨立按鈕，有自己的解鎖條件。整體互動模式跟 DKG panel
-  一致，但生命週期更長（要追蹤到鏈上確認）
-  - 錢包下拉選單會自動帶入 Wallets tab 已選的 sender（透過 page.tsx 提升的 selectedWalletIndex
-  state），跨 tab 狀態傳遞設計在 fr-008 就預先做好了
-  - Explorer URL 同時支援 API 回傳的 explorer_url 和 client-side 用 tx_signature 自行組裝，做了
-  fallback 處理
+**我觀察到的：**
+- 簽名流程只有 2 rounds per node（不像 DKG 有 3 rounds），但多了一個 Aggregate & Broadcast 步驟作為獨立按鈕，有自己的解鎖條件。整體互動模式跟 DKG panel 一致，但生命週期更長（要追蹤到鏈上確認）
+- 錢包下拉選單會自動帶入 Wallets tab 已選的 sender（透過 page.tsx 提升的 selectedWalletIndex state），跨 tab 狀態傳遞設計在 fr-008 就預先做好了
+- Explorer URL 同時支援 API 回傳的 explorer_url 和 client-side 用 tx_signature 自行組裝，做了 fallback 處理
 
 ---
 
 ### 後端錢包衍生與簽名實作（fr-005 + fr-006）— 2026-04-23
 
-  **問題：** 需要實作兩個緊密相關的功能：(1) 從 DKG 產生的共享公鑰衍生 Solana 錢包地址，(2)
-  用衍生的子金鑰份額完成 FROST 門檻簽名並廣播到 Solana Devnet。這兩個 PRD 合併成一次 dispatch 以節省
-  token。
+**問題：** 需要實作兩個緊密相關的功能：(1) 從 DKG 產生的共享公鑰衍生 Solana 錢包地址，(2) 用衍生的子金鑰份額完成 FROST 門檻簽名並廣播到 Solana Devnet。這兩個 PRD 合併成一次 dispatch 以節省 token。
 
-  **AI 互動：** 把 fr-005 和 fr-006 合併派給同一個後端
-  agent，先做錢包衍生再做簽名。這是策略性決定——兩個都是密碼學邏輯、都在同一個 crate、fr-006 直接依賴
-  fr-005 的衍生模組，合併省一次 agent 啟動成本。
+**AI 互動：** 把 fr-005 和 fr-006 合併派給同一個後端 agent，先做錢包衍生再做簽名。這是策略性決定——兩個都是密碼學邏輯、都在同一個 crate、fr-006 直接依賴 fr-005 的衍生模組，合併省一次 agent 啟動成本。
 
-  **AI 產出的內容：**
+**AI 產出的內容：**
 
-  *fr-005 — 錢包衍生：*
-  - Coordinator 端 derivation 模組：FROST VerifyingKey → hd-wallet ExtendedPublicKey 橋接
-  - Node 端 derivation 模組：子金鑰份額衍生（給簽名用）
-  - 三個 wallet API endpoint 完整實作
+*fr-005 — 錢包衍生：*
+- Coordinator 端 derivation 模組：FROST VerifyingKey → hd-wallet ExtendedPublicKey 橋接
+- Node 端 derivation 模組：子金鑰份額衍生（給簽名用）
+- 三個 wallet API endpoint 完整實作
 
-  *fr-006 — 簽名與廣播：*
-  - Coordinator signing routes 全部實作（992 行，5 個 handler）
-  - Solana 交易構建、FROST 簽名注入、RPC 廣播、非同步確認 polling
+*fr-006 — 簽名與廣播：*
+- Coordinator signing routes 全部實作（992 行，5 個 handler）
+- Solana 交易構建、FROST 簽名注入、RPC 廣播、非同步確認 polling
 
-  **我的審查判斷：**
-  - 我要求 AI 用白話把錢包衍生 → 簽名 →
-  廣播的完整資料流走一遍，因為我對密碼學底層不熟，需要先理解整體流程才能判斷實作是否合理
-  - 確認了 non-hardened derivation 的關鍵特性：Coordinator 只用公開資料就能衍生錢包地址，不需要問
-  Node。但簽名時 Node 各自從私鑰份額衍生子份額，數學上保證對應同一把子公鑰
-  - 確認了簽名流程的安全邊界：tx message 只建一次存 DB（確保兩個 Node 簽的是同一份資料）、nonce
-  用完即刪、Coordinator 全程只碰公開資料
-  - 確認了 `send_transaction` vs `send_and_confirm_transaction` 的選擇合理——FROST
-  預簽的交易不能重新簽名，所以不能用後者，改用前者加背景 polling
-  - 這是我第一次理解到：門檻簽名產出的簽名跟普通 Ed25519 簽名完全一樣，鏈上驗證者看不出差別。這代表
-  FROST 不需要鏈的特殊支援
+**我的審查判斷：**
+- 我要求 AI 用白話把錢包衍生 → 簽名 → 廣播的完整資料流走一遍，因為我對密碼學底層不熟，需要先理解整體流程才能判斷實作是否合理
+- 確認了 non-hardened derivation 的關鍵特性：Coordinator 只用公開資料就能衍生錢包地址，不需要問 Node。但簽名時 Node 各自從私鑰份額衍生子份額，數學上保證對應同一把子公鑰
+- 確認了簽名流程的安全邊界：tx message 只建一次存 DB（確保兩個 Node 簽的是同一份資料）、nonce 用完即刪、Coordinator 全程只碰公開資料
+- 確認了 `send_transaction` vs `send_and_confirm_transaction` 的選擇合理——FROST 預簽的交易不能重新簽名，所以不能用後者，改用前者加背景 polling
+- 這是我第一次理解到：門檻簽名產出的簽名跟普通 Ed25519 簽名完全一樣，鏈上驗證者看不出差別。這代表 FROST 不需要鏈的特殊支援
 
-  **修正過程：**
-  - Agent 第一次 dispatch 撞 rate limit，fr-005 做完但 fr-006 的 coordinator 端還是 501 stub。重新
-  dispatch 時只指派剩餘的 coordinator signing 邏輯，避免重做已完成的工作。這是 token
-  預算管理的實戰經驗——中斷後要精確評估進度再決定重派範圍
+**修正過程：**
+- Agent 第一次 dispatch 撞 rate limit，fr-005 做完但 fr-006 的 coordinator 端還是 501 stub。重新 dispatch 時只指派剩餘的 coordinator signing 邏輯，避免重做已完成的工作。這是 token 預算管理的實戰經驗——中斷後要精確評估進度再決定重派範圍
 
-  **我學到的：**
-  - FROST 和 hd-wallet 底層都用 curve25519-dalek，但 byte order 不同（FROST/dalek 是
-  little-endian，generic-ec 是 big-endian）。跨函式庫轉換需要 byte reversal
-  - FROST 的 `SigningShare::to_scalar()` 是 `pub(crate)`，不能直接存取內部 scalar。用 serde
-  序列化→反序列化繞過這個限制
-  - `send_and_confirm_transaction` 在 FROST 預簽場景不能用，因為它會嘗試重新簽名。必須用
-  `send_transaction` + 自己 polling 確認狀態
-  - solana-sdk v3 做了 breaking change，移除了 `system_instruction` module
+**我學到的：**
+- FROST 和 hd-wallet 底層都用 curve25519-dalek，但 byte order 不同（FROST/dalek 是 little-endian，generic-ec 是 big-endian）。跨函式庫轉換需要 byte reversal
+- FROST 的 `SigningShare::to_scalar()` 是 `pub(crate)`，不能直接存取內部 scalar。用 serde 序列化→反序列化繞過這個限制
+- `send_and_confirm_transaction` 在 FROST 預簽場景不能用，因為它會嘗試重新簽名。必須用 `send_transaction` + 自己 polling 確認狀態
+- solana-sdk v3 做了 breaking change，移除了 `system_instruction` module
 
 ---
 
-### 2026-04-21 — fr-010: Docker Compose 整合 + 測試
+### Docker Compose 整合與測試（fr-010）— 2026-04-23
 
-  **目標**：確保 `docker compose up`
-  啟動完整系統，並撰寫自動化測試驗證三大核心流程。
+**問題：** 所有服務都個別開發完成，但從未在 Docker 環境中一起運行過。需要確保 `docker compose up` 能啟動完整系統，並撰寫自動化測試驗證三大核心流程端對端跑通。
 
-  **AI 產出了什麼：**
-  - 修正 docker-compose.yml 的環境變數配置（前端
-  `NEXT_PUBLIC_API_URL`、服務間 URL、PostgreSQL volume 路徑）
-  - 為 Next.js 的 build-time 變數內嵌問題加了 Dockerfile build arg
-  - 撰寫 15 個 unit tests（tss-node 9 個 + coordinator 6 個），涵蓋
-   DKG round-trip、HD 衍生一致性、threshold signing 正確性
-  - 建立 shell-based integration test script，透過 curl 驅動完整
-  happy path
+**AI 互動：** 派後端 agent 修正 Docker 設定並撰寫測試。這是 human review PRD——Docker 設定直接影響評審能不能一鍵跑起系統。
 
-  **我的審查判斷：**
-  - 確認 Next.js `NEXT_PUBLIC_*` 變數的 build-time vs runtime
-  差異是真實的坑 — Docker 環境下必須用 build arg
-  - PostgreSQL volume 路徑從 `/var/lib/postgresql` 改到
-  `/var/lib/postgresql/data` 是正確的，前者會導致容器重建時資料遺失
-  - Unit tests 覆蓋了密碼學核心路徑（DKG
-  完整性、衍生確定性、簽名正確性），這些是最關鍵的測試點
-  - 剩餘的 runtime 驗證（UI
-  端到端、重啟持久化、冷啟動）需要我本機用 Docker 實際跑過確認
+**AI 產出的內容：**
+- 修正 docker-compose.yml 環境變數配置（前端 `NEXT_PUBLIC_API_URL`、服務間 URL）
+- 為 Next.js 的 build-time 變數內嵌問題加了 Dockerfile build arg
+- 撰寫 15 個 unit tests（tss-node 9 個 + coordinator 6 個），涵蓋 DKG round-trip、HD 衍生一致性、threshold signing 正確性
+- 建立 shell-based integration test script，透過 curl 驅動完整 happy path
+
+**我的審查判斷：**
+- 確認 Next.js `NEXT_PUBLIC_*` 變數的 build-time vs runtime 差異是真實的坑 — Docker 環境下必須用 build arg，runtime environment 只對 SSR 有效，不影響 client-side bundle
+- Unit tests 覆蓋了密碼學核心路徑（DKG 完整性、衍生確定性、簽名正確性），這些是最關鍵的測試點
+- 剩餘的 runtime 驗證（UI 端到端、重啟持久化、冷啟動）需要我本機用 Docker 實際跑過確認
 
 ---
 
-### 2026-04-23 — Docker 環境除錯與 Integration Test 驗證
+### Docker 環境除錯與 Integration Test 驗證 — 2026-04-23
 
-  **問題排查過程：**
+**問題：** 在本機實際運行 Docker 環境時，遇到三個連鎖問題需要排查。
 
-  1. **Integration test 卡住**：`./tests/integration-test.sh` 在 `POST /api/dkg/start`
-  卡住。透過 `curl -s /api/dkg/status` 手動確認 DKG 其實第一次已經跑完了（status:
-  complete），第二次 start 碰到已存在的 session 造成 hang。解法：`docker compose down -v`
-  清掉資料重跑。
+**問題排查過程：**
 
-  2. **PostgreSQL 18 volume 路徑 breaking change**：清掉 volume 後重啟，postgres 報
-  unhealthy。查 log 發現 PG 18+ 不再接受 mount 在 `/var/lib/postgresql/data`，改為
-  `/var/lib/postgresql` 由 PG 自行管理子目錄。這是 AI 在 fr-010 中修成 `/data` 路徑，但 PG 18
-  的 breaking change 又把它打回去。
+1. **Integration test 卡住**：`./tests/integration-test.sh` 在 `POST /api/dkg/start` 卡住。透過 `curl -s /api/dkg/status` 手動確認 DKG 其實第一次已經跑完了（status: complete），第二次 start 碰到已存在的 session 造成 hang。解法：`docker compose down -v` 清掉資料重跑。
 
-  3. **Frontend healthcheck 失敗**：postgres 修好後 frontend 仍 unhealthy。AI 建議用
-  wget，但我自己排查發現根本原因是 `node:slim` image 既沒有 curl 也不一定有 wget。改用 Node.js
-   內建 `http` 模組做 healthcheck，不依賴額外工具。
+2. **PostgreSQL 18 volume 路徑 breaking change**：清掉 volume 後重啟，postgres 報 unhealthy。查 log 發現 PG 18+ 不再接受 mount 在 `/var/lib/postgresql/data`，改為 `/var/lib/postgresql` 由 PG 自行管理子目錄。第一次跑因為 volume 是空的所以沒事，`down -v` 後就爆了。這提醒我 AI 產出的配置仍需要實際 runtime 驗證。
 
-  **我的審查判斷：**
-  - AI 在 fr-010 中把 PG volume 從 `/var/lib/postgresql` 改成
-  `/var/lib/postgresql/data`，結果踩到 PG 18 的 breaking change。第一次跑因為 volume
-  是空的所以沒事，`down -v` 後就爆了。這提醒我 AI 產出的配置仍需要實際 runtime 驗證。
-  - Frontend healthcheck 的解法我選擇用 Node.js 內建 HTTP 做檢查，因為 runtime image 一定有
-  node，不需要額外安裝任何工具。比 curl/wget 方案更 robust。
-  - 殘留風險：healthcheck 打 `/`，如果首頁未來改成 redirect 或非 200 回應會誤判
-  unhealthy。之後可以補專用 `/health` 端點，但不是現在的 blocker。
-  - 三組 healthcheck 方案各有對應：backend 用 curl（Dockerfile 有裝）、postgres 用
-  pg_isready（官方內建）、frontend 用 node http（runtime 自帶）。
+3. **Frontend healthcheck 失敗**：postgres 修好後 frontend 仍 unhealthy。AI 建議用 wget，但我自己排查發現根本原因是 `node:slim` image 既沒有 curl 也不一定有 wget。改用 Node.js 內建 `http` 模組做 healthcheck，不依賴額外工具。
+
+**我的判斷：**
+- Frontend healthcheck 的解法我選擇用 Node.js 內建 HTTP 做檢查，因為 runtime image 一定有 node，不需要額外安裝任何工具。比 curl/wget 方案更 robust
+- 殘留風險：healthcheck 打 `/`，如果首頁未來改成 redirect 或非 200 回應會誤判 unhealthy。之後可以補專用 `/health` 端點，但不是現在的 blocker
+- 三組 healthcheck 方案各有對應：backend 用 curl（Dockerfile 有裝）、postgres 用 pg_isready（官方內建）、frontend 用 node http（runtime 自帶）
+
+**教訓：** AI 的訓練資料有截止日期。PG 18 的 volume 路徑 breaking change、`node:slim` 缺少 curl 這類近期變化，AI 不一定知道。任何 Docker 配置都必須在真實環境中跑過才能信任。
+
+**Integration test 結果：** 三個問題修完後，22/22 tests passed。UI 手動測試 DKG → 錢包衍生 → 簽名流程全部跑通。
 
 ---
 
+### 完整系統 Code Review + 功能面驗收 — 2026-04-24
 
-## 持續記錄的模板
+**問題：** 系統已全部開發完成（fr-001 ~ fr-011）並通過測試。但作為最終驗收，我需要從程式碼層面完整理解整個系統的運作方式，並比對 assignment 原文確認功能完整性。
 
-```markdown
-### [階段/任務名稱] — [日期]
+**AI 互動：** 透過 pair coding 式的逐檔 code review，請 AI 從資料庫 schema 開始，由底層往上白話講解每個模組的作用。這不是讓 AI 自己審查——而是我用 AI 當老師，建立自己對系統的完整理解。
 
-**問題：** 你要解決什麼？
+**我建立的核心理解：**
 
-**AI 互動：** 你如何引導 AI？
+1. **資料庫安全設計**：三個獨立 DB 不是偶然，coordinator_db 只存公開資料，secret share 只存在各自 node 的 DB。就算 coordinator 被入侵也拿不到私鑰。
 
-**AI 設計/產出了什麼：** AI 做了什麼具體工作？
+2. **兩個 derivation.rs 的分工**：coordinator 端只做公鑰衍生（產生 Solana 地址），tss-node 端做私鑰碎片衍生（產生簽名用的 child share）。程式碼層面就實現了「coordinator 不碰私鑰」的安全邊界。
 
-**我的審查判斷：** 我確認了什麼、調整了什麼方向、做了哪些策略取捨？
-- 判斷：[內容]
-- AI 的設計：[替代方案]
-- 我的理由：[為什麼這樣判斷]
+3. **DKG 和簽名的關係**：DKG 是一次性的地基，產出 root share；簽名每次從 root share 衍生 child share 來用。單向依賴，簽名不會回頭影響 DKG。
 
-**修正過程：** AI 有沒有出錯？你怎麼修正的？
-- 問題：[出了什麼錯]
-- 如何發現：[怎麼注意到的]
-- 修正：[做了什麼]
-- 教訓：[學到什麼]
+4. **Nonce 安全性**：signing_nonces 表的 UNIQUE constraint + Round 2 完成後立即刪除，防止 nonce 重用（重用會洩漏 secret share）。
 
-**我學到的：** 透過這次互動獲得的新領域知識
-```
+5. **send_transaction vs send_and_confirm_transaction**：後者會嘗試重新簽名，但 FROST 預簽交易沒有完整私鑰可以重簽，所以只能用前者 + 自己寫背景輪詢。了解到 `send_and_confirm_transaction` 是給持有完整私鑰的一般 Solana 應用用的便利工具。
+
+**我的功能面驗收：**
+
+完成 code review 後，我主動比對 assignment 原文，找出兩個潛在風險：
+
+1. **confirmed 狀態判定**：目前用 `status.err.is_none()` 判斷成功，沒有檢查 Solana 的 `confirmation_status` 是否真的達到 confirmed/finalized 層級。理論上 processed 階段就可能進來。但 Devnet 上 processed → confirmed 通常不到 1 秒，polling 間隔 2 秒，實務風險極低。判斷為 demo scope 可接受，不修改。Production 環境會額外檢查 confirmation_status 層級。
+
+2. **Signing request list 顯示全部**：assignment 偏向「待簽名請求」，但我們顯示全部歷史並用狀態標籤區分。判斷這是更好的 UX 選擇 — demo 情境下請求數量少，全部列出讓 reviewer 更容易追蹤完整生命週期。Production 環境會加分頁和篩選。
+
+**驗收後修正 — confirmed 狀態判定強化：**
+  在功能面驗收中識別出 confirmed
+  狀態判定不夠嚴格後，我決定修正這個問題而不是留到面試口頭說明。
+
+  - 問題：原本的 `poll_confirmation` 只檢查 `status.err.is_none()` 就標記為 confirmed。但
+  Solana 的 `get_signature_statuses` 回傳的交易可能處於 `processed`
+  階段（節點已處理但叢集尚未確認），理論上仍可能被 drop。
+  - 修正：加入 `confirmation_status` 檢查，只有當 Solana 網路回報 `Confirmed` 或 `Finalized`
+  時才標記為 confirmed。`Processed` 階段繼續 polling
+  等待。同時重構了錯誤檢查順序——先判斷鏈上錯誤（立即 return failed），再判斷確認層級。
+  - 判斷：這個改動風險極低（純增加條件檢查），但直接回應 assignment 原文「Confirmed 以 Solana
+  網路回報 confirmed 為準」的要求。值得修正。
+
+  改完程式碼確認編譯通過後，再跑一次 docker compose down -v && docker compose up --build +
+  integration test，確保沒壞掉。
