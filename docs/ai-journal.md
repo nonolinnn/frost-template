@@ -255,6 +255,36 @@
 
 ---
 
+### 前端簽名與交易介面（fr-009）— 2026-04-22
+
+  **問題：** 實作 FROST 簽名流程的前端介面。使用者需要能建立簽名請求、逐步觸發每個 Node
+  的兩輪簽名、聚合並廣播到 Solana
+  Devnet，以及追蹤交易狀態直到確認。這是三個核心流程中互動最複雜的一個。
+
+  **AI 互動：** 派前端 agent，給它 HTML mockup 的 Signing tab、設計指南和 API 合約。設為
+  self-review，跟 fr-008 一樣的理由——前端配線屬於低風險類別。fr-008 已經建好 tab
+  navigation、設計系統和 API client 基礎，這次只需要填入 Signing tab 的完整內容。
+
+  **AI 產出的內容：**
+  - `transactions-panel.tsx` 完整重寫（~550 行）：建立簽名請求表單（錢包下拉選單 + 收款地址 Base58
+  驗證 + 金額輸入）、split-view 版面（左側 request list + 右側 detail panel）、水平 status timeline
+  stepper（6 步驟）、雙 Node panel 各有獨立的 per-round Execute 按鈕、Aggregate & Broadcast
+  按鈕（兩個 node 都完 Round 2 才解鎖）、交易結果卡片附 Solana Explorer 連結
+  - `api.ts` 加入 5 個 signing API functions（createSigningRequest, listSigningRequests,
+  getSigningRequest, executeSigningRound, aggregateAndBroadcast）
+  - `page.tsx` 更新，把 dkgComplete 和 selectedWalletIndex 傳給 TransactionsPanel
+
+  **我觀察到的：**
+  - 簽名流程只有 2 rounds per node（不像 DKG 有 3 rounds），但多了一個 Aggregate & Broadcast
+  步驟作為獨立按鈕，有自己的解鎖條件。整體互動模式跟 DKG panel
+  一致，但生命週期更長（要追蹤到鏈上確認）
+  - 錢包下拉選單會自動帶入 Wallets tab 已選的 sender（透過 page.tsx 提升的 selectedWalletIndex
+  state），跨 tab 狀態傳遞設計在 fr-008 就預先做好了
+  - Explorer URL 同時支援 API 回傳的 explorer_url 和 client-side 用 tx_signature 自行組裝，做了
+  fallback 處理
+
+  ---
+
 ## 持續記錄的模板
 
 ```markdown

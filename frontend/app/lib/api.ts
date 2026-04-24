@@ -144,6 +144,100 @@ export async function getWalletBalance(index: number): Promise<WalletBalance> {
   return request<WalletBalance>(`/api/wallets/${index}/balance`);
 }
 
+// ---------- Signing Requests ----------
+
+export type SigningRequestStatus =
+  | "pending"
+  | "round1_in_progress"
+  | "round2_in_progress"
+  | "aggregating"
+  | "broadcasted"
+  | "confirmed"
+  | "failed";
+
+export interface SigningNodeRounds {
+  round1: RoundStatus;
+  round2: RoundStatus;
+}
+
+export interface SigningRequest {
+  id: string;
+  wallet_index: number;
+  sender_address: string;
+  recipient: string;
+  amount_lamports: number;
+  status: SigningRequestStatus;
+  created_at: string;
+  updated_at?: string;
+  tx_signature: string | null;
+  explorer_url: string | null;
+  error_message?: string | null;
+  nodes: Record<string, SigningNodeRounds>;
+}
+
+export interface SigningRequestListResponse {
+  signing_requests: SigningRequest[];
+}
+
+export interface SigningRoundResponse {
+  signing_request_id: string;
+  node_id: string;
+  round: number;
+  status: string;
+  signing_request_status: SigningRequestStatus;
+  nodes: Record<string, SigningNodeRounds>;
+}
+
+export interface AggregateResponse {
+  signing_request_id: string;
+  status: SigningRequestStatus;
+  tx_signature: string;
+  explorer_url: string;
+}
+
+export async function createSigningRequest(
+  walletIndex: number,
+  recipient: string,
+  amountLamports: number,
+): Promise<SigningRequest> {
+  return request<SigningRequest>("/api/signing-requests", {
+    method: "POST",
+    body: JSON.stringify({
+      wallet_index: walletIndex,
+      recipient,
+      amount_lamports: amountLamports,
+    }),
+  });
+}
+
+export async function listSigningRequests(): Promise<SigningRequestListResponse> {
+  return request<SigningRequestListResponse>("/api/signing-requests");
+}
+
+export async function getSigningRequest(id: string): Promise<SigningRequest> {
+  return request<SigningRequest>(`/api/signing-requests/${id}`);
+}
+
+export async function executeSigningRound(
+  requestId: string,
+  round: number,
+  nodeId: string,
+): Promise<SigningRoundResponse> {
+  return request<SigningRoundResponse>(
+    `/api/signing-requests/${requestId}/round/${round}/node/${nodeId}`,
+    { method: "POST" },
+  );
+}
+
+export async function aggregateAndBroadcast(
+  requestId: string,
+): Promise<AggregateResponse> {
+  return request<AggregateResponse>(
+    `/api/signing-requests/${requestId}/aggregate`,
+    { method: "POST" },
+  );
+}
+
 // ---------- Error helpers ----------
 
 export function isApiError(err: unknown): err is ApiRequestError {

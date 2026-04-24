@@ -116,7 +116,12 @@ export default function Home() {
             onSelectWallet={setSelectedWalletIndex}
           />
         )}
-        {activeTab === "signing" && <TransactionsPanel />}
+        {activeTab === "signing" && (
+          <TransactionsPanel
+            dkgComplete={dkgComplete}
+            selectedWalletIndex={selectedWalletIndex}
+          />
+        )}
       </main>
 
       {/* Footer */}
