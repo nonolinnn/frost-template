@@ -229,3 +229,340 @@ pub fn derive_child_key_package(
 
     Ok((child_key_package, child_public_key_package))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use frost_ed25519::keys::dkg;
+    use frost_ed25519::{self as frost, Identifier, SigningPackage};
+    use rand::rngs::OsRng;
+    use std::collections::BTreeMap;
+
+    /// Helper: derive a FROST Identifier from a node ID string,
+    /// matching the convention used throughout the codebase.
+    fn id_for(node_id: &str) -> Identifier {
+        Identifier::derive(node_id.as_bytes()).unwrap()
+    }
+
+    /// Run a full 2-of-2 DKG between two participants, returning
+    /// each participant's (KeyPackage, PublicKeyPackage).
+    fn run_dkg() -> (
+        (KeyPackage, PublicKeyPackage),
+        (KeyPackage, PublicKeyPackage),
+    ) {
+        let mut rng = OsRng;
+        let id_a = id_for("node-a");
+        let id_b = id_for("node-b");
+
+        // ---- Round 1 ----
+        let (secret_a1, package_a1) = dkg::part1(id_a, 2, 2, &mut rng).unwrap();
+        let (secret_b1, package_b1) = dkg::part1(id_b, 2, 2, &mut rng).unwrap();
+
+        // ---- Round 2 ----
+        let mut r1_for_a = BTreeMap::new();
+        r1_for_a.insert(id_b, package_b1.clone());
+        let (secret_a2, packages_a2) = dkg::part2(secret_a1, &r1_for_a).unwrap();
+
+        let mut r1_for_b = BTreeMap::new();
+        r1_for_b.insert(id_a, package_a1.clone());
+        let (secret_b2, packages_b2) = dkg::part2(secret_b1, &r1_for_b).unwrap();
+
+        // ---- Round 3 ----
+        let mut r2_for_a = BTreeMap::new();
+        r2_for_a.insert(id_b, packages_b2.get(&id_a).unwrap().clone());
+        let (kp_a, pkp_a) = dkg::part3(&secret_a2, &r1_for_a, &r2_for_a).unwrap();
+
+        let mut r2_for_b = BTreeMap::new();
+        r2_for_b.insert(id_a, packages_a2.get(&id_b).unwrap().clone());
+        let (kp_b, pkp_b) = dkg::part3(&secret_b2, &r1_for_b, &r2_for_b).unwrap();
+
+        ((kp_a, pkp_a), (kp_b, pkp_b))
+    }
+
+    // ---- Test 1: DKG round-trip correctness ----
+
+    #[test]
+    fn dkg_produces_matching_group_public_keys() {
+        let ((_, pkp_a), (_, pkp_b)) = run_dkg();
+
+        // Both nodes must agree on the group verifying key.
+        let vk_a = pkp_a.verifying_key();
+        let vk_b = pkp_b.verifying_key();
+
+        let vk_a_bytes = vk_a.serialize().unwrap();
+        let vk_b_bytes = vk_b.serialize().unwrap();
+
+        assert_eq!(
+            vk_a_bytes, vk_b_bytes,
+            "Both nodes should derive the same group verifying key from DKG"
+        );
+    }
+
+    #[test]
+    fn dkg_produces_consistent_verifying_shares() {
+        let ((_, pkp_a), (_, pkp_b)) = run_dkg();
+
+        let id_a = id_for("node-a");
+        let id_b = id_for("node-b");
+
+        // Node A's view of node-B's verifying share should match
+        // node B's view of node-B's verifying share, and vice versa.
+        let a_view_of_b = pkp_a.verifying_shares().get(&id_b).unwrap();
+        let b_view_of_b = pkp_b.verifying_shares().get(&id_b).unwrap();
+        assert_eq!(
+            serde_json::to_value(a_view_of_b).unwrap(),
+            serde_json::to_value(b_view_of_b).unwrap(),
+            "Both nodes should agree on node-b's verifying share"
+        );
+
+        let a_view_of_a = pkp_a.verifying_shares().get(&id_a).unwrap();
+        let b_view_of_a = pkp_b.verifying_shares().get(&id_a).unwrap();
+        assert_eq!(
+            serde_json::to_value(a_view_of_a).unwrap(),
+            serde_json::to_value(b_view_of_a).unwrap(),
+            "Both nodes should agree on node-a's verifying share"
+        );
+    }
+
+    // ---- Test 2: Wallet derivation consistency ----
+
+    #[test]
+    fn child_key_derivation_produces_consistent_verifying_keys() {
+        let ((kp_a, pkp_a), (kp_b, pkp_b)) = run_dkg();
+
+        let wallet_index = 0u32;
+
+        // Both nodes derive child key packages
+        let (child_kp_a, child_pkp_a) =
+            derive_child_key_package(&kp_a, &pkp_a, wallet_index).unwrap();
+        let (child_kp_b, child_pkp_b) =
+            derive_child_key_package(&kp_b, &pkp_b, wallet_index).unwrap();
+
+        // Child verifying keys must match
+        let child_vk_a = child_pkp_a.verifying_key();
+        let child_vk_b = child_pkp_b.verifying_key();
+
+        let child_vk_a_bytes = child_vk_a.serialize().unwrap();
+        let child_vk_b_bytes = child_vk_b.serialize().unwrap();
+
+        assert_eq!(
+            child_vk_a_bytes, child_vk_b_bytes,
+            "Both nodes should derive the same child verifying key for wallet index {wallet_index}"
+        );
+
+        // The key package's verifying key should also match
+        assert_eq!(
+            child_kp_a.verifying_key().serialize().unwrap(),
+            child_vk_a_bytes,
+            "Node A's child key package verifying key should match the public key package"
+        );
+        assert_eq!(
+            child_kp_b.verifying_key().serialize().unwrap(),
+            child_vk_b_bytes,
+            "Node B's child key package verifying key should match the public key package"
+        );
+    }
+
+    #[test]
+    fn child_key_derivation_different_indices_produce_different_keys() {
+        let ((kp_a, pkp_a), _) = run_dkg();
+
+        let (_, child_pkp_0) = derive_child_key_package(&kp_a, &pkp_a, 0).unwrap();
+        let (_, child_pkp_1) = derive_child_key_package(&kp_a, &pkp_a, 1).unwrap();
+
+        let vk_0 = child_pkp_0.verifying_key().serialize().unwrap();
+        let vk_1 = child_pkp_1.verifying_key().serialize().unwrap();
+
+        assert_ne!(
+            vk_0, vk_1,
+            "Different wallet indices should produce different child verifying keys"
+        );
+    }
+
+    #[test]
+    fn child_key_derivation_is_deterministic() {
+        let ((kp_a, pkp_a), _) = run_dkg();
+
+        let (_, child_pkp_first) = derive_child_key_package(&kp_a, &pkp_a, 42).unwrap();
+        let (_, child_pkp_second) = derive_child_key_package(&kp_a, &pkp_a, 42).unwrap();
+
+        assert_eq!(
+            child_pkp_first.verifying_key().serialize().unwrap(),
+            child_pkp_second.verifying_key().serialize().unwrap(),
+            "Derivation with the same index should be deterministic"
+        );
+    }
+
+    // ---- Test 3: Threshold signing correctness ----
+
+    #[test]
+    fn threshold_signing_with_root_keys_produces_valid_signature() {
+        let ((kp_a, pkp_a), (kp_b, _pkp_b)) = run_dkg();
+
+        let mut rng = OsRng;
+        let message = b"test message for FROST threshold signing";
+
+        // Round 1: generate nonces and commitments
+        let (nonces_a, commitments_a) =
+            frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) =
+            frost::round1::commit(kp_b.signing_share(), &mut rng);
+
+        // Build commitments map
+        let mut commitments_map = BTreeMap::new();
+        commitments_map.insert(*kp_a.identifier(), commitments_a);
+        commitments_map.insert(*kp_b.identifier(), commitments_b);
+
+        // Create signing package
+        let signing_package = SigningPackage::new(commitments_map, message);
+
+        // Round 2: each node produces a signature share
+        let sig_share_a =
+            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b =
+            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+
+        // Aggregate
+        let mut sig_shares = BTreeMap::new();
+        sig_shares.insert(*kp_a.identifier(), sig_share_a);
+        sig_shares.insert(*kp_b.identifier(), sig_share_b);
+
+        let group_signature =
+            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+
+        // Verify the aggregated signature against the group verifying key
+        let vk = pkp_a.verifying_key();
+        assert!(
+            vk.verify(message, &group_signature).is_ok(),
+            "Aggregated FROST signature should verify against the group verifying key"
+        );
+    }
+
+    #[test]
+    fn threshold_signing_with_derived_child_keys_produces_valid_signature() {
+        let ((kp_a, pkp_a), (kp_b, pkp_b)) = run_dkg();
+
+        let wallet_index = 7u32;
+        let mut rng = OsRng;
+        let message = b"signing with a derived child key at index 7";
+
+        // Derive child key packages
+        let (child_kp_a, child_pkp_a) =
+            derive_child_key_package(&kp_a, &pkp_a, wallet_index).unwrap();
+        let (child_kp_b, _child_pkp_b) =
+            derive_child_key_package(&kp_b, &pkp_b, wallet_index).unwrap();
+
+        // Round 1: generate nonces and commitments using child signing shares
+        let (nonces_a, commitments_a) =
+            frost::round1::commit(child_kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) =
+            frost::round1::commit(child_kp_b.signing_share(), &mut rng);
+
+        // Build commitments map
+        let mut commitments_map = BTreeMap::new();
+        commitments_map.insert(*child_kp_a.identifier(), commitments_a);
+        commitments_map.insert(*child_kp_b.identifier(), commitments_b);
+
+        // Create signing package
+        let signing_package = SigningPackage::new(commitments_map, message);
+
+        // Round 2
+        let sig_share_a =
+            frost::round2::sign(&signing_package, &nonces_a, &child_kp_a).unwrap();
+        let sig_share_b =
+            frost::round2::sign(&signing_package, &nonces_b, &child_kp_b).unwrap();
+
+        // Aggregate using the child public key package
+        let mut sig_shares = BTreeMap::new();
+        sig_shares.insert(*child_kp_a.identifier(), sig_share_a);
+        sig_shares.insert(*child_kp_b.identifier(), sig_share_b);
+
+        let group_signature =
+            frost::aggregate(&signing_package, &sig_shares, &child_pkp_a).unwrap();
+
+        // Verify the aggregated signature against the child verifying key
+        let child_vk = child_pkp_a.verifying_key();
+        assert!(
+            child_vk.verify(message, &group_signature).is_ok(),
+            "Aggregated FROST signature with derived child keys should verify"
+        );
+    }
+
+    #[test]
+    fn threshold_signing_signature_is_64_bytes() {
+        let ((kp_a, pkp_a), (kp_b, _)) = run_dkg();
+
+        let mut rng = OsRng;
+        let message = b"check signature byte length";
+
+        let (nonces_a, commitments_a) =
+            frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) =
+            frost::round1::commit(kp_b.signing_share(), &mut rng);
+
+        let mut commitments_map = BTreeMap::new();
+        commitments_map.insert(*kp_a.identifier(), commitments_a);
+        commitments_map.insert(*kp_b.identifier(), commitments_b);
+
+        let signing_package = SigningPackage::new(commitments_map, message);
+
+        let sig_share_a =
+            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b =
+            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+
+        let mut sig_shares = BTreeMap::new();
+        sig_shares.insert(*kp_a.identifier(), sig_share_a);
+        sig_shares.insert(*kp_b.identifier(), sig_share_b);
+
+        let group_signature =
+            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+
+        // Ed25519 signatures are 64 bytes (R || s)
+        let sig_bytes = group_signature.serialize().unwrap();
+        assert_eq!(
+            sig_bytes.len(),
+            64,
+            "Ed25519 FROST signature should be exactly 64 bytes"
+        );
+    }
+
+    #[test]
+    fn threshold_signing_wrong_message_fails_verification() {
+        let ((kp_a, pkp_a), (kp_b, _)) = run_dkg();
+
+        let mut rng = OsRng;
+        let message = b"the real message";
+        let wrong_message = b"a different message";
+
+        let (nonces_a, commitments_a) =
+            frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) =
+            frost::round1::commit(kp_b.signing_share(), &mut rng);
+
+        let mut commitments_map = BTreeMap::new();
+        commitments_map.insert(*kp_a.identifier(), commitments_a);
+        commitments_map.insert(*kp_b.identifier(), commitments_b);
+
+        let signing_package = SigningPackage::new(commitments_map, message);
+
+        let sig_share_a =
+            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b =
+            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+
+        let mut sig_shares = BTreeMap::new();
+        sig_shares.insert(*kp_a.identifier(), sig_share_a);
+        sig_shares.insert(*kp_b.identifier(), sig_share_b);
+
+        let group_signature =
+            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+
+        // Verification against the wrong message should fail
+        let vk = pkp_a.verifying_key();
+        assert!(
+            vk.verify(wrong_message, &group_signature).is_err(),
+            "Signature should not verify against a different message"
+        );
+    }
+}

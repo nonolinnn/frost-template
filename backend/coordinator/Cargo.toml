@@ -28,3 +28,6 @@ hex.workspace = true
 curve25519-dalek.workspace = true
 bincode.workspace = true
 solana-system-interface.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

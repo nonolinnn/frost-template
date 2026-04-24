@@ -334,6 +334,63 @@
 
 ---
 
+### 2026-04-21 — fr-010: Docker Compose 整合 + 測試
+
+  **目標**：確保 `docker compose up`
+  啟動完整系統，並撰寫自動化測試驗證三大核心流程。
+
+  **AI 產出了什麼：**
+  - 修正 docker-compose.yml 的環境變數配置（前端
+  `NEXT_PUBLIC_API_URL`、服務間 URL、PostgreSQL volume 路徑）
+  - 為 Next.js 的 build-time 變數內嵌問題加了 Dockerfile build arg
+  - 撰寫 15 個 unit tests（tss-node 9 個 + coordinator 6 個），涵蓋
+   DKG round-trip、HD 衍生一致性、threshold signing 正確性
+  - 建立 shell-based integration test script，透過 curl 驅動完整
+  happy path
+
+  **我的審查判斷：**
+  - 確認 Next.js `NEXT_PUBLIC_*` 變數的 build-time vs runtime
+  差異是真實的坑 — Docker 環境下必須用 build arg
+  - PostgreSQL volume 路徑從 `/var/lib/postgresql` 改到
+  `/var/lib/postgresql/data` 是正確的，前者會導致容器重建時資料遺失
+  - Unit tests 覆蓋了密碼學核心路徑（DKG
+  完整性、衍生確定性、簽名正確性），這些是最關鍵的測試點
+  - 剩餘的 runtime 驗證（UI
+  端到端、重啟持久化、冷啟動）需要我本機用 Docker 實際跑過確認
+
+---
+
+### 2026-04-23 — Docker 環境除錯與 Integration Test 驗證
+
+  **問題排查過程：**
+
+  1. **Integration test 卡住**：`./tests/integration-test.sh` 在 `POST /api/dkg/start`
+  卡住。透過 `curl -s /api/dkg/status` 手動確認 DKG 其實第一次已經跑完了（status:
+  complete），第二次 start 碰到已存在的 session 造成 hang。解法：`docker compose down -v`
+  清掉資料重跑。
+
+  2. **PostgreSQL 18 volume 路徑 breaking change**：清掉 volume 後重啟，postgres 報
+  unhealthy。查 log 發現 PG 18+ 不再接受 mount 在 `/var/lib/postgresql/data`，改為
+  `/var/lib/postgresql` 由 PG 自行管理子目錄。這是 AI 在 fr-010 中修成 `/data` 路徑，但 PG 18
+  的 breaking change 又把它打回去。
+
+  3. **Frontend healthcheck 失敗**：postgres 修好後 frontend 仍 unhealthy。AI 建議用
+  wget，但我自己排查發現根本原因是 `node:slim` image 既沒有 curl 也不一定有 wget。改用 Node.js
+   內建 `http` 模組做 healthcheck，不依賴額外工具。
+
+  **我的審查判斷：**
+  - AI 在 fr-010 中把 PG volume 從 `/var/lib/postgresql` 改成
+  `/var/lib/postgresql/data`，結果踩到 PG 18 的 breaking change。第一次跑因為 volume
+  是空的所以沒事，`down -v` 後就爆了。這提醒我 AI 產出的配置仍需要實際 runtime 驗證。
+  - Frontend healthcheck 的解法我選擇用 Node.js 內建 HTTP 做檢查，因為 runtime image 一定有
+  node，不需要額外安裝任何工具。比 curl/wget 方案更 robust。
+  - 殘留風險：healthcheck 打 `/`，如果首頁未來改成 redirect 或非 200 回應會誤判
+  unhealthy。之後可以補專用 `/health` 端點，但不是現在的 blocker。
+  - 三組 healthcheck 方案各有對應：backend 用 curl（Dockerfile 有裝）、postgres 用
+  pg_isready（官方內建）、frontend 用 node http（runtime 自帶）。
+
+---
+
 
 ## 持續記錄的模板
 

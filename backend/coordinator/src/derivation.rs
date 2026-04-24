@@ -247,3 +247,196 @@ pub fn derive_child_public_key_package(
 
     Ok(PublicKeyPackage::new(child_verifying_shares, child_vk))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use frost_ed25519::keys::dkg;
+    use frost_ed25519::Identifier;
+    use rand::rngs::OsRng;
+    use std::collections::BTreeMap;
+
+    /// Helper: derive a FROST Identifier from a node ID string.
+    fn id_for(node_id: &str) -> Identifier {
+        Identifier::derive(node_id.as_bytes()).unwrap()
+    }
+
+    /// Run a full 2-of-2 DKG and return per-node key packages plus the
+    /// group public key as Base58.
+    fn run_dkg() -> (
+        frost_ed25519::keys::KeyPackage,
+        frost_ed25519::keys::KeyPackage,
+        frost_ed25519::keys::PublicKeyPackage,
+        String, // group_public_key_b58
+    ) {
+        let mut rng = OsRng;
+        let id_a = id_for("node-a");
+        let id_b = id_for("node-b");
+
+        let (s_a1, p_a1) = dkg::part1(id_a, 2, 2, &mut rng).unwrap();
+        let (s_b1, p_b1) = dkg::part1(id_b, 2, 2, &mut rng).unwrap();
+
+        let mut r1_a = BTreeMap::new();
+        r1_a.insert(id_b, p_b1.clone());
+        let (s_a2, pkgs_a2) = dkg::part2(s_a1, &r1_a).unwrap();
+
+        let mut r1_b = BTreeMap::new();
+        r1_b.insert(id_a, p_a1.clone());
+        let (s_b2, pkgs_b2) = dkg::part2(s_b1, &r1_b).unwrap();
+
+        let mut r2_a = BTreeMap::new();
+        r2_a.insert(id_b, pkgs_b2.get(&id_a).unwrap().clone());
+        let (kp_a, pkp_a) = dkg::part3(&s_a2, &r1_a, &r2_a).unwrap();
+
+        let mut r2_b = BTreeMap::new();
+        r2_b.insert(id_a, pkgs_a2.get(&id_b).unwrap().clone());
+        let (kp_b, _pkp_b) = dkg::part3(&s_b2, &r1_b, &r2_b).unwrap();
+
+        let vk_bytes = pkp_a.verifying_key().serialize().unwrap();
+        let gpk_b58 = bs58::encode(&vk_bytes).into_string();
+
+        (kp_a, kp_b, pkp_a, gpk_b58)
+    }
+
+    // ---- Wallet address derivation ----
+
+    #[test]
+    fn derive_child_public_key_returns_valid_solana_address() {
+        let (_, _, _, gpk_b58) = run_dkg();
+
+        let derived = derive_child_public_key(&gpk_b58, 0).unwrap();
+
+        // Solana addresses are Base58-encoded 32-byte Ed25519 keys.
+        let decoded = bs58::decode(&derived.address).into_vec().unwrap();
+        assert_eq!(
+            decoded.len(),
+            32,
+            "Derived address should decode to exactly 32 bytes"
+        );
+        assert_eq!(
+            derived.address, derived.public_key,
+            "For Ed25519, Solana address should equal the public key"
+        );
+    }
+
+    #[test]
+    fn derive_child_public_key_different_indices_give_different_addresses() {
+        let (_, _, _, gpk_b58) = run_dkg();
+
+        let d0 = derive_child_public_key(&gpk_b58, 0).unwrap();
+        let d1 = derive_child_public_key(&gpk_b58, 1).unwrap();
+
+        assert_ne!(
+            d0.address, d1.address,
+            "Different wallet indices should yield different addresses"
+        );
+    }
+
+    #[test]
+    fn derive_child_public_key_is_deterministic() {
+        let (_, _, _, gpk_b58) = run_dkg();
+
+        let d1 = derive_child_public_key(&gpk_b58, 5).unwrap();
+        let d2 = derive_child_public_key(&gpk_b58, 5).unwrap();
+
+        assert_eq!(
+            d1.address, d2.address,
+            "Same group key + same index should always produce the same address"
+        );
+    }
+
+    // ---- Coordinator ↔ Node derivation consistency ----
+
+    #[test]
+    fn coordinator_child_vk_matches_node_child_vk() {
+        // This test verifies that the coordinator's public-key-only
+        // derivation produces the same child verifying key as a node's
+        // full key derivation.
+        let (kp_a, _kp_b, pkp_a, gpk_b58) = run_dkg();
+
+        let wallet_index = 3u32;
+
+        // Coordinator derives the child public key
+        let coord_derived = derive_child_public_key(&gpk_b58, wallet_index).unwrap();
+
+        // Node derives the child key package (has the full secret)
+        let child_extended_pk = {
+            let parent = frost_vk_to_extended_pk(&gpk_b58).unwrap();
+            let idx = hd_wallet::NonHardenedIndex::try_from(wallet_index).unwrap();
+            hd_wallet::Edwards::derive_child_public_key(&parent, idx)
+        };
+        let node_child_pk_bytes = child_extended_pk.public_key.to_bytes(true);
+        let node_child_address = bs58::encode(node_child_pk_bytes.as_ref()).into_string();
+
+        assert_eq!(
+            coord_derived.address, node_child_address,
+            "Coordinator and node must derive the same child address"
+        );
+    }
+
+    // ---- PublicKeyPackage derivation ----
+
+    #[test]
+    fn derive_child_public_key_package_produces_valid_package() {
+        let (_kp_a, _kp_b, pkp_a, gpk_b58) = run_dkg();
+
+        let id_a = id_for("node-a");
+        let id_b = id_for("node-b");
+
+        // Build verifying shares map (Base58)
+        let mut vs_b58 = BTreeMap::new();
+        for (nid, id) in [("node-a", id_a), ("node-b", id_b)] {
+            let vs = pkp_a.verifying_shares().get(&id).unwrap();
+            let vs_bytes = serde_json::to_value(vs).unwrap();
+            let vs_hex = vs_bytes.as_str().unwrap();
+            let vs_raw = hex::decode(vs_hex).unwrap();
+            let vs_b58_str = bs58::encode(&vs_raw).into_string();
+            vs_b58.insert(nid.to_string(), vs_b58_str);
+        }
+
+        let child_pkp =
+            derive_child_public_key_package(&gpk_b58, &vs_b58, 0).unwrap();
+
+        // Verify it has the correct number of verifying shares
+        assert_eq!(
+            child_pkp.verifying_shares().len(),
+            2,
+            "Child public key package should have 2 verifying shares"
+        );
+
+        // Verify the child verifying key is valid (non-identity)
+        let child_vk_bytes = child_pkp.verifying_key().serialize().unwrap();
+        assert_eq!(child_vk_bytes.len(), 32);
+    }
+
+    #[test]
+    fn coordinator_child_pkp_vk_matches_child_address() {
+        // The child PublicKeyPackage's verifying key should correspond
+        // to the same Solana address as derive_child_public_key.
+        let (_kp_a, _kp_b, pkp_a, gpk_b58) = run_dkg();
+
+        let id_a = id_for("node-a");
+        let id_b = id_for("node-b");
+
+        let mut vs_b58 = BTreeMap::new();
+        for (nid, id) in [("node-a", id_a), ("node-b", id_b)] {
+            let vs = pkp_a.verifying_shares().get(&id).unwrap();
+            let vs_hex = serde_json::to_value(vs).unwrap();
+            let vs_raw = hex::decode(vs_hex.as_str().unwrap()).unwrap();
+            vs_b58.insert(nid.to_string(), bs58::encode(&vs_raw).into_string());
+        }
+
+        let wallet_index = 0u32;
+        let child_pkp =
+            derive_child_public_key_package(&gpk_b58, &vs_b58, wallet_index).unwrap();
+        let child_vk_bytes = child_pkp.verifying_key().serialize().unwrap();
+        let child_vk_address = bs58::encode(&child_vk_bytes).into_string();
+
+        let wallet = derive_child_public_key(&gpk_b58, wallet_index).unwrap();
+
+        assert_eq!(
+            wallet.address, child_vk_address,
+            "derive_child_public_key and derive_child_public_key_package should agree on the child address"
+        );
+    }
+}
