@@ -60,6 +60,30 @@ api_get() {
     curl -sf "${COORDINATOR}${path}"
 }
 
+jq_node_round_status() {
+    local json="$1" node="$2" round="$3"
+    echo "$json" | jq -r --arg node "$node" --arg round "$round" '.nodes[$node][$round] // "missing"'
+}
+
+run_dkg_round_if_pending() {
+    local status_json="$1" round="$2" node="$3"
+    local round_key="round${round}"
+    local current
+    current=$(jq_node_round_status "$status_json" "$node" "$round_key")
+
+    if [ "$current" = "complete" ]; then
+        yellow "Skipping DKG Round ${round} for ${node} (already complete)..."
+        return 0
+    fi
+
+    yellow "Executing DKG Round ${round} for ${node}..."
+    local response
+    response=$(api_post "/api/dkg/round/${round}/node/${node}")
+    local resp_status
+    resp_status=$(echo "$response" | jq -r '.status')
+    assert_eq "Round ${round} ${node} status" "$resp_status" "complete"
+}
+
 # ---- Wait for services to be ready --------------------------------
 
 bold "=== Waiting for coordinator to be healthy ==="
@@ -80,56 +104,35 @@ done
 bold ""
 bold "=== Step 1: Distributed Key Generation (DKG) ==="
 
-# Start DKG session
-yellow "Starting DKG session..."
-DKG_START=$(api_post "/api/dkg/start")
-SESSION_ID=$(echo "$DKG_START" | jq -r '.session_id')
-assert_not_empty "DKG session_id" "$SESSION_ID"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+DKG_FINAL_STATUS=$(echo "$DKG_STATUS_RESP" | jq -r '.status')
 
-DKG_STATUS=$(echo "$DKG_START" | jq -r '.status')
-assert_eq "DKG initial status" "$DKG_STATUS" "initialized"
+if [ "$DKG_FINAL_STATUS" = "not_started" ]; then
+    yellow "Starting DKG session..."
+    DKG_START=$(api_post "/api/dkg/start")
+    SESSION_ID=$(echo "$DKG_START" | jq -r '.session_id')
+    assert_not_empty "DKG session_id" "$SESSION_ID"
+    DKG_STATUS=$(echo "$DKG_START" | jq -r '.status')
+    assert_eq "DKG initial status" "$DKG_STATUS" "initialized"
+    DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+elif [ "$DKG_FINAL_STATUS" = "complete" ]; then
+    yellow "Reusing existing completed DKG session..."
+else
+    yellow "Resuming existing DKG session in status '$DKG_FINAL_STATUS'..."
+fi
 
-# Round 1 for both nodes
-yellow "Executing Round 1 for node-a..."
-R1A=$(api_post "/api/dkg/round/1/node/node-a")
-R1A_STATUS=$(echo "$R1A" | jq -r '.status')
-assert_eq "Round 1 node-a status" "$R1A_STATUS" "complete"
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 1 "node-a"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 1 "node-b"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 2 "node-a"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 2 "node-b"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 3 "node-a"
+DKG_STATUS_RESP=$(api_get "/api/dkg/status")
+run_dkg_round_if_pending "$DKG_STATUS_RESP" 3 "node-b"
 
-yellow "Executing Round 1 for node-b..."
-R1B=$(api_post "/api/dkg/round/1/node/node-b")
-R1B_STATUS=$(echo "$R1B" | jq -r '.status')
-assert_eq "Round 1 node-b status" "$R1B_STATUS" "complete"
-
-# Round 2 for both nodes
-yellow "Executing Round 2 for node-a..."
-R2A=$(api_post "/api/dkg/round/2/node/node-a")
-R2A_STATUS=$(echo "$R2A" | jq -r '.status')
-assert_eq "Round 2 node-a status" "$R2A_STATUS" "complete"
-
-yellow "Executing Round 2 for node-b..."
-R2B=$(api_post "/api/dkg/round/2/node/node-b")
-R2B_STATUS=$(echo "$R2B" | jq -r '.status')
-assert_eq "Round 2 node-b status" "$R2B_STATUS" "complete"
-
-# Round 3 for both nodes
-yellow "Executing Round 3 for node-a..."
-R3A=$(api_post "/api/dkg/round/3/node/node-a")
-R3A_STATUS=$(echo "$R3A" | jq -r '.status')
-assert_eq "Round 3 node-a status" "$R3A_STATUS" "complete"
-
-yellow "Executing Round 3 for node-b..."
-R3B=$(api_post "/api/dkg/round/3/node/node-b")
-R3B_STATUS=$(echo "$R3B" | jq -r '.status')
-assert_eq "Round 3 node-b status" "$R3B_STATUS" "complete"
-
-# Verify DKG completion
-DKG_COMPLETE=$(echo "$R3B" | jq -r '.dkg_complete // empty')
-assert_eq "DKG complete flag" "$DKG_COMPLETE" "true"
-
-GROUP_PK=$(echo "$R3B" | jq -r '.group_public_key // empty')
-assert_not_empty "Group public key" "$GROUP_PK"
-
-# Double-check via status endpoint
 DKG_STATUS_RESP=$(api_get "/api/dkg/status")
 DKG_FINAL_STATUS=$(echo "$DKG_STATUS_RESP" | jq -r '.status')
 assert_eq "DKG final status" "$DKG_FINAL_STATUS" "complete"
@@ -142,17 +145,22 @@ assert_not_empty "Group public key in status" "$STATUS_GPK"
 bold ""
 bold "=== Step 2: Wallet Derivation ==="
 
-yellow "Deriving wallet 0..."
+WALLETS_BEFORE=$(api_get "/api/wallets")
+WALLET_COUNT_BEFORE=$(echo "$WALLETS_BEFORE" | jq '.wallets | length')
+EXPECTED_WALLET_INDEX=$(echo "$WALLETS_BEFORE" | jq -r '[.wallets[].index] | if length == 0 then 0 else (max + 1) end')
+
+yellow "Deriving next wallet..."
 WALLET=$(api_post "/api/wallets")
 WALLET_INDEX=$(echo "$WALLET" | jq -r '.index')
 WALLET_ADDRESS=$(echo "$WALLET" | jq -r '.address')
-assert_eq "Wallet index" "$WALLET_INDEX" "0"
+assert_eq "Wallet index" "$WALLET_INDEX" "$EXPECTED_WALLET_INDEX"
 assert_not_empty "Wallet address" "$WALLET_ADDRESS"
 
 yellow "Listing wallets..."
 WALLETS=$(api_get "/api/wallets")
 WALLET_COUNT=$(echo "$WALLETS" | jq '.wallets | length')
-assert_eq "Wallet count" "$WALLET_COUNT" "1"
+EXPECTED_WALLET_COUNT=$((WALLET_COUNT_BEFORE + 1))
+assert_eq "Wallet count" "$WALLET_COUNT" "$EXPECTED_WALLET_COUNT"
 
 # ---- Step 3: Signing Flow -----------------------------------------
 
@@ -165,7 +173,7 @@ AMOUNT=1000
 
 yellow "Creating signing request..."
 SIGNING_REQ=$(api_post "/api/signing-requests" \
-    -d "{\"wallet_index\": 0, \"recipient\": \"$RECIPIENT\", \"amount_lamports\": $AMOUNT}")
+    -d "{\"wallet_index\": ${WALLET_INDEX}, \"recipient\": \"$RECIPIENT\", \"amount_lamports\": $AMOUNT}")
 SIGNING_ID=$(echo "$SIGNING_REQ" | jq -r '.id')
 SIGNING_STATUS=$(echo "$SIGNING_REQ" | jq -r '.status')
 assert_not_empty "Signing request ID" "$SIGNING_ID"

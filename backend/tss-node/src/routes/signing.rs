@@ -71,12 +71,11 @@ async fn round1_handler(
         })?;
 
     // Derive child key package for the given wallet index
-    let (child_key_package, _child_public_key_package) =
-        derivation::derive_child_key_package(
-            &root_key_package,
-            &root_public_key_package,
-            wallet_index as u32,
-        )?;
+    let (child_key_package, _child_public_key_package) = derivation::derive_child_key_package(
+        &root_key_package,
+        &root_public_key_package,
+        wallet_index as u32,
+    )?;
 
     // Generate nonces and commitments using the child signing share
     let mut rng = rand::rngs::OsRng;
@@ -91,10 +90,9 @@ async fn round1_handler(
     db::signing::insert_nonces(&state.pool, signing_request_id, &nonces_json).await?;
 
     // Serialize commitments for the response
-    let commitments_json =
-        serde_json::to_value(&commitments).map_err(|e| AppError::Internal {
-            message: format!("Failed to serialize commitments: {e}"),
-        })?;
+    let commitments_json = serde_json::to_value(&commitments).map_err(|e| AppError::Internal {
+        message: format!("Failed to serialize commitments: {e}"),
+    })?;
 
     tracing::info!(
         node_id,
@@ -158,21 +156,19 @@ async fn round2_handler(
         })?;
 
     // Derive child key package
-    let (child_key_package, _child_public_key_package) =
-        derivation::derive_child_key_package(
-            &root_key_package,
-            &root_public_key_package,
-            wallet_index as u32,
-        )?;
+    let (child_key_package, _child_public_key_package) = derivation::derive_child_key_package(
+        &root_key_package,
+        &root_public_key_package,
+        wallet_index as u32,
+    )?;
 
     // Decode the transaction message from Base64
     use base64::Engine;
-    let message_bytes =
-        base64::engine::general_purpose::STANDARD
-            .decode(&body.message)
-            .map_err(|e| AppError::InvalidMessage {
-                message: format!("Invalid base64 message: {e}"),
-            })?;
+    let message_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&body.message)
+        .map_err(|e| AppError::InvalidMessage {
+            message: format!("Invalid base64 message: {e}"),
+        })?;
 
     // Build the commitments map: Identifier -> SigningCommitments
     let mut commitments_map: BTreeMap<Identifier, round1::SigningCommitments> = BTreeMap::new();

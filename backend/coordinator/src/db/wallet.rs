@@ -34,10 +34,9 @@ pub async fn get_wallet_by_index(pool: &PgPool, index: i32) -> AppResult<Option<
 
 /// Get the next available derivation index (max index + 1, or 0 if none exist).
 pub async fn next_index(pool: &PgPool) -> AppResult<i32> {
-    let row: Option<(Option<i32>,)> =
-        sqlx::query_as(r#"SELECT MAX(index) FROM wallets"#)
-            .fetch_optional(pool)
-            .await?;
+    let row: Option<(Option<i32>,)> = sqlx::query_as(r#"SELECT MAX(index) FROM wallets"#)
+        .fetch_optional(pool)
+        .await?;
     match row {
         Some((Some(max),)) => Ok(max + 1),
         _ => Ok(0),

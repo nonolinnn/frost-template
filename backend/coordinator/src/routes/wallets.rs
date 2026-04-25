@@ -98,11 +98,12 @@ async fn get_balance(
         .ok_or(AppError::WalletNotFound { index })?;
 
     // Decode the Solana address
-    let pubkey_bytes = bs58::decode(&wallet.address)
-        .into_vec()
-        .map_err(|e| AppError::Internal {
-            message: format!("Failed to decode wallet address: {e}"),
-        })?;
+    let pubkey_bytes =
+        bs58::decode(&wallet.address)
+            .into_vec()
+            .map_err(|e| AppError::Internal {
+                message: format!("Failed to decode wallet address: {e}"),
+            })?;
 
     let pubkey = Pubkey::try_from(pubkey_bytes.as_slice()).map_err(|e| AppError::Internal {
         message: format!("Invalid Solana pubkey: {e}"),
@@ -110,11 +111,12 @@ async fn get_balance(
 
     // Query Solana Devnet for balance
     let rpc_client = solana_client::rpc_client::RpcClient::new(&state.config.solana_rpc_url);
-    let balance_lamports = rpc_client
-        .get_balance(&pubkey)
-        .map_err(|e| AppError::SolanaRpcError {
-            message: format!("Failed to query balance: {e}"),
-        })?;
+    let balance_lamports =
+        rpc_client
+            .get_balance(&pubkey)
+            .map_err(|e| AppError::SolanaRpcError {
+                message: format!("Failed to query balance: {e}"),
+            })?;
 
     let balance_sol = balance_lamports as f64 / 1_000_000_000.0;
 

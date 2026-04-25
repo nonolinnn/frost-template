@@ -33,10 +33,10 @@ impl Config {
         let solana_rpc_url = std::env::var("SOLANA_RPC_URL")
             .unwrap_or_else(|_| "https://api.devnet.solana.com".into());
 
-        let node_a_url = std::env::var("NODE_A_URL")
-            .unwrap_or_else(|_| "http://node-a:8081".into());
-        let node_b_url = std::env::var("NODE_B_URL")
-            .unwrap_or_else(|_| "http://node-b:8082".into());
+        let node_a_url =
+            std::env::var("NODE_A_URL").unwrap_or_else(|_| "http://node-a:8081".into());
+        let node_b_url =
+            std::env::var("NODE_B_URL").unwrap_or_else(|_| "http://node-b:8082".into());
 
         let mut node_urls = HashMap::new();
         node_urls.insert("node-a".to_string(), node_a_url);

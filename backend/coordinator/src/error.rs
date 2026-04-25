@@ -135,9 +135,9 @@ impl AppError {
             | Self::SolanaRpcError { .. }
             | Self::BroadcastFailed { .. } => StatusCode::BAD_GATEWAY,
 
-            Self::AggregationFailed { .. }
-            | Self::Database { .. }
-            | Self::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::AggregationFailed { .. } | Self::Database { .. } | Self::Internal { .. } => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
 
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
         }

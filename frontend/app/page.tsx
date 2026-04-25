@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import DkgPanel from "@/app/components/dkg-panel";
 import WalletsPanel from "@/app/components/wallets-panel";
 import TransactionsPanel from "@/app/components/transactions-panel";
-import { getDkgStatus, formatApiError, type DkgStatus } from "@/app/lib/api";
+import { getDkgStatus, type DkgStatus } from "@/app/lib/api";
 
 type Tab = "dkg" | "wallets" | "signing";
 
@@ -23,21 +23,28 @@ export default function Home() {
   const [connectionOk, setConnectionOk] = useState<boolean | null>(null);
 
   // Poll DKG status at the page level so Wallets tab knows when DKG is done
-  const checkDkgStatus = useCallback(async () => {
-    try {
-      const status: DkgStatus = await getDkgStatus();
-      setDkgComplete(status.status === "complete");
-      setConnectionOk(true);
-    } catch {
-      setConnectionOk(false);
-    }
-  }, []);
-
   useEffect(() => {
-    checkDkgStatus();
-    const interval = setInterval(checkDkgStatus, 5000);
-    return () => clearInterval(interval);
-  }, [checkDkgStatus]);
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const status: DkgStatus = await getDkgStatus();
+        if (!cancelled) {
+          setDkgComplete(status.status === "complete");
+          setConnectionOk(true);
+        }
+      } catch {
+        if (!cancelled) setConnectionOk(false);
+      }
+    };
+
+    void poll();
+    const interval = setInterval(() => void poll(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col">

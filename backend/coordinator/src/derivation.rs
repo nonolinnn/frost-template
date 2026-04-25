@@ -39,11 +39,12 @@ pub fn frost_vk_to_extended_pk(
     group_public_key_b58: &str,
 ) -> Result<ExtendedPublicKey<Ed25519>, AppError> {
     // Decode Base58 to raw bytes (32-byte compressed Edwards Y)
-    let vk_bytes = bs58::decode(group_public_key_b58)
-        .into_vec()
-        .map_err(|e| AppError::Internal {
-            message: format!("Failed to decode group public key from Base58: {e}"),
-        })?;
+    let vk_bytes =
+        bs58::decode(group_public_key_b58)
+            .into_vec()
+            .map_err(|e| AppError::Internal {
+                message: format!("Failed to decode group public key from Base58: {e}"),
+            })?;
 
     if vk_bytes.len() != 32 {
         return Err(AppError::Internal {
@@ -127,15 +128,11 @@ fn derive_shift(
     };
 
     let child_index = NonHardenedIndex::try_from(wallet_index).map_err(|_| AppError::Internal {
-        message: format!(
-            "Wallet index {wallet_index} is out of range for non-hardened derivation"
-        ),
+        message: format!("Wallet index {wallet_index} is out of range for non-hardened derivation"),
     })?;
 
-    let derived = <Edwards as hd_wallet::DeriveShift<Ed25519>>::derive_public_shift(
-        &parent_pk,
-        child_index,
-    );
+    let derived =
+        <Edwards as hd_wallet::DeriveShift<Ed25519>>::derive_public_shift(&parent_pk, child_index);
 
     // Convert generic-ec Scalar<Ed25519> to curve25519-dalek Scalar.
     // generic-ec serializes as big-endian; curve25519-dalek uses little-endian.
@@ -167,11 +164,12 @@ pub fn derive_child_public_key_package(
     wallet_index: u32,
 ) -> Result<PublicKeyPackage, AppError> {
     // Decode group verifying key
-    let vk_bytes_vec = bs58::decode(group_public_key_b58)
-        .into_vec()
-        .map_err(|e| AppError::Internal {
-            message: format!("Failed to decode group public key: {e}"),
-        })?;
+    let vk_bytes_vec =
+        bs58::decode(group_public_key_b58)
+            .into_vec()
+            .map_err(|e| AppError::Internal {
+                message: format!("Failed to decode group public key: {e}"),
+            })?;
     let vk_bytes: [u8; 32] = vk_bytes_vec.try_into().map_err(|_| AppError::Internal {
         message: "Group public key is not 32 bytes".to_string(),
     })?;
@@ -182,10 +180,9 @@ pub fn derive_child_public_key_package(
 
     // Derive child verifying key
     let parent_pk = {
-        let point =
-            Point::<Ed25519>::from_bytes(&vk_bytes).map_err(|e| AppError::Internal {
-                message: format!("Failed to parse group VK: {e}"),
-            })?;
+        let point = Point::<Ed25519>::from_bytes(&vk_bytes).map_err(|e| AppError::Internal {
+            message: format!("Failed to parse group VK: {e}"),
+        })?;
         let chain_code = derive_chain_code(&vk_bytes);
         ExtendedPublicKey {
             public_key: point,
@@ -198,11 +195,9 @@ pub fn derive_child_public_key_package(
     let child_extended_pk = Edwards::derive_child_public_key(&parent_pk, child_index);
     let child_vk_bytes = child_extended_pk.public_key.to_bytes(true);
     let child_vk_hex = hex::encode(child_vk_bytes.as_ref());
-    let child_vk: VerifyingKey =
-        serde_json::from_value(serde_json::Value::String(child_vk_hex)).map_err(|e| {
-            AppError::Internal {
-                message: format!("Failed to deserialize child verifying key: {e}"),
-            }
+    let child_vk: VerifyingKey = serde_json::from_value(serde_json::Value::String(child_vk_hex))
+        .map_err(|e| AppError::Internal {
+            message: format!("Failed to deserialize child verifying key: {e}"),
         })?;
 
     // Derive child verifying shares for each participant
@@ -226,9 +221,7 @@ pub fn derive_child_public_key_package(
         let parent_point = curve25519_dalek::edwards::CompressedEdwardsY(point_bytes)
             .decompress()
             .ok_or_else(|| AppError::Internal {
-                message: format!(
-                    "Failed to decompress verifying share point for {node_id}"
-                ),
+                message: format!("Failed to decompress verifying share point for {node_id}"),
             })?;
 
         // child_verifying_share = parent_verifying_share + shift * G
@@ -394,8 +387,7 @@ mod tests {
             vs_b58.insert(nid.to_string(), vs_b58_str);
         }
 
-        let child_pkp =
-            derive_child_public_key_package(&gpk_b58, &vs_b58, 0).unwrap();
+        let child_pkp = derive_child_public_key_package(&gpk_b58, &vs_b58, 0).unwrap();
 
         // Verify it has the correct number of verifying shares
         assert_eq!(
@@ -427,8 +419,7 @@ mod tests {
         }
 
         let wallet_index = 0u32;
-        let child_pkp =
-            derive_child_public_key_package(&gpk_b58, &vs_b58, wallet_index).unwrap();
+        let child_pkp = derive_child_public_key_package(&gpk_b58, &vs_b58, wallet_index).unwrap();
         let child_vk_bytes = child_pkp.verifying_key().serialize().unwrap();
         let child_vk_address = bs58::encode(&child_vk_bytes).into_string();
 

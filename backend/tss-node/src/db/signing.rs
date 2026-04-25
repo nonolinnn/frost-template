@@ -46,10 +46,7 @@ pub async fn insert_nonces(
 ///
 /// Nonce reuse would compromise the private key, so consumed nonces
 /// must be removed.
-pub async fn delete_nonces(
-    pool: &PgPool,
-    signing_request_id: Uuid,
-) -> AppResult<()> {
+pub async fn delete_nonces(pool: &PgPool, signing_request_id: Uuid) -> AppResult<()> {
     sqlx::query(
         r#"
         DELETE FROM signing_nonces

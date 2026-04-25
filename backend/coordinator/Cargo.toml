@@ -32,3 +32,4 @@ solana-transaction-status.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
+tower.workspace = true

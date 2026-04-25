@@ -77,9 +77,9 @@ impl AppError {
             | Self::InvalidCommitments { .. }
             | Self::InvalidMessage { .. } => StatusCode::BAD_REQUEST,
 
-            Self::CryptoError { .. }
-            | Self::Database { .. }
-            | Self::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::CryptoError { .. } | Self::Database { .. } | Self::Internal { .. } => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
 
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
         }

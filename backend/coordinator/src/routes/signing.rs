@@ -95,11 +95,10 @@ fn build_signing_request_response(
 ) -> SigningRequestResponse {
     let nodes = build_node_status(round_states);
 
-    let explorer_url = row.tx_signature.as_ref().map(|sig| {
-        format!(
-            "https://explorer.solana.com/tx/{sig}?cluster=devnet"
-        )
-    });
+    let explorer_url = row
+        .tx_signature
+        .as_ref()
+        .map(|sig| format!("https://explorer.solana.com/tx/{sig}?cluster=devnet"));
 
     SigningRequestResponse {
         id: row.id,
@@ -160,8 +159,7 @@ async fn create_signing_request(
     )
     .await?;
 
-    let round_states =
-        db::signing::get_signing_round_states(&state.pool, row.id).await?;
+    let round_states = db::signing::get_signing_round_states(&state.pool, row.id).await?;
 
     let response = build_signing_request_response(&row, &round_states, &wallet.address);
 
@@ -184,8 +182,7 @@ async fn list_signing_requests(
 
     let mut signing_requests = Vec::with_capacity(rows.len());
     for row in &rows {
-        let round_states =
-            db::signing::get_signing_round_states(&state.pool, row.id).await?;
+        let round_states = db::signing::get_signing_round_states(&state.pool, row.id).await?;
 
         // Look up wallet address
         let wallet = db::wallet::get_wallet_by_index(&state.pool, row.wallet_index).await?;
@@ -212,8 +209,7 @@ async fn get_signing_request(
         .await?
         .ok_or(AppError::SigningRequestNotFound { id })?;
 
-    let round_states =
-        db::signing::get_signing_round_states(&state.pool, row.id).await?;
+    let round_states = db::signing::get_signing_round_states(&state.pool, row.id).await?;
 
     let wallet = db::wallet::get_wallet_by_index(&state.pool, row.wallet_index).await?;
     let sender_address = wallet
@@ -256,10 +252,9 @@ async fn execute_round(
     }
 
     // Check if this round is already complete for this node
-    let round_state =
-        db::signing::get_signing_round_state(&state.pool, id, &node_id, round)
-            .await?
-            .ok_or(AppError::SigningRequestNotFound { id })?;
+    let round_state = db::signing::get_signing_round_state(&state.pool, id, &node_id, round)
+        .await?
+        .ok_or(AppError::SigningRequestNotFound { id })?;
 
     if round_state.status == "complete" {
         return Err(AppError::RoundAlreadyComplete {
@@ -278,30 +273,13 @@ async fn execute_round(
         .to_string();
 
     match round {
-        1 => {
-            execute_signing_round1(
-                &state,
-                &signing_request,
-                &node_id,
-                &node_url,
-            )
-            .await?
-        }
-        2 => {
-            execute_signing_round2(
-                &state,
-                &signing_request,
-                &node_id,
-                &node_url,
-            )
-            .await?
-        }
+        1 => execute_signing_round1(&state, &signing_request, &node_id, &node_url).await?,
+        2 => execute_signing_round2(&state, &signing_request, &node_id, &node_url).await?,
         _ => unreachable!(),
     }
 
     // Determine new signing request status
-    let round_states =
-        db::signing::get_signing_round_states(&state.pool, id).await?;
+    let round_states = db::signing::get_signing_round_states(&state.pool, id).await?;
     let nodes = build_node_status(&round_states);
 
     let new_status = compute_signing_status(&nodes);
@@ -322,9 +300,7 @@ async fn execute_round(
 }
 
 /// Compute the overall signing request status from the per-node round statuses.
-fn compute_signing_status(
-    nodes: &HashMap<String, SigningNodeRoundStatus>,
-) -> String {
+fn compute_signing_status(nodes: &HashMap<String, SigningNodeRoundStatus>) -> String {
     let all_round1_complete = NODE_IDS.iter().all(|nid| {
         nodes
             .get(*nid)
@@ -414,12 +390,13 @@ async fn execute_signing_round1(
     })?;
 
     // Extract commitments from the response
-    let commitments = resp.get("commitments").cloned().ok_or_else(|| {
-        AppError::NodeError {
+    let commitments = resp
+        .get("commitments")
+        .cloned()
+        .ok_or_else(|| AppError::NodeError {
             node_id: node_id.to_string(),
             message: "commitments missing from round1 response".to_string(),
-        }
-    })?;
+        })?;
 
     // Store commitments as output_data for this round
     db::signing::complete_signing_round(
@@ -467,11 +444,8 @@ async fn execute_signing_round2(
     let _other_id = other_node_id(node_id);
 
     // Precondition: both nodes must have completed Round 1
-    let round_states = db::signing::get_signing_round_states(
-        &state.pool,
-        signing_request.id,
-    )
-    .await?;
+    let round_states =
+        db::signing::get_signing_round_states(&state.pool, signing_request.id).await?;
 
     let mut commitments_map: HashMap<String, serde_json::Value> = HashMap::new();
 
@@ -485,9 +459,7 @@ async fn execute_signing_round2(
 
         if r1.status != "complete" {
             return Err(AppError::RoundPrecondition {
-                message: format!(
-                    "{nid} has not completed Round 1"
-                ),
+                message: format!("{nid} has not completed Round 1"),
             });
         }
 
@@ -504,12 +476,8 @@ async fn execute_signing_round2(
         stored_msg.clone()
     } else {
         let msg_bytes = build_solana_message(state, signing_request).await?;
-        db::signing::update_signing_request_tx_message(
-            &state.pool,
-            signing_request.id,
-            &msg_bytes,
-        )
-        .await?;
+        db::signing::update_signing_request_tx_message(&state.pool, signing_request.id, &msg_bytes)
+            .await?;
         msg_bytes
     };
 
@@ -549,12 +517,13 @@ async fn execute_signing_round2(
     })?;
 
     // Extract signature share
-    let signature_share = resp.get("signature_share").cloned().ok_or_else(|| {
-        AppError::NodeError {
-            node_id: node_id.to_string(),
-            message: "signature_share missing from round2 response".to_string(),
-        }
-    })?;
+    let signature_share =
+        resp.get("signature_share")
+            .cloned()
+            .ok_or_else(|| AppError::NodeError {
+                node_id: node_id.to_string(),
+                message: "signature_share missing from round2 response".to_string(),
+            })?;
 
     // Store signature share as output_data for round 2
     db::signing::complete_signing_round(
@@ -583,19 +552,19 @@ async fn build_solana_message(
     signing_request: &crate::models::signing::SigningRequestRow,
 ) -> AppResult<Vec<u8>> {
     // Look up the sender wallet
-    let wallet =
-        db::wallet::get_wallet_by_index(&state.pool, signing_request.wallet_index)
-            .await?
-            .ok_or(AppError::WalletNotFound {
-                index: signing_request.wallet_index,
-            })?;
+    let wallet = db::wallet::get_wallet_by_index(&state.pool, signing_request.wallet_index)
+        .await?
+        .ok_or(AppError::WalletNotFound {
+            index: signing_request.wallet_index,
+        })?;
 
     // Parse sender pubkey
-    let from_pubkey_bytes = bs58::decode(&wallet.address)
-        .into_vec()
-        .map_err(|e| AppError::Internal {
-            message: format!("Failed to decode sender address: {e}"),
-        })?;
+    let from_pubkey_bytes =
+        bs58::decode(&wallet.address)
+            .into_vec()
+            .map_err(|e| AppError::Internal {
+                message: format!("Failed to decode sender address: {e}"),
+            })?;
     let from_pubkey =
         Pubkey::try_from(from_pubkey_bytes.as_slice()).map_err(|e| AppError::Internal {
             message: format!("Invalid sender pubkey: {e}"),
@@ -613,8 +582,7 @@ async fn build_solana_message(
         })?;
 
     // Get recent blockhash from Solana RPC
-    let rpc_client =
-        solana_client::rpc_client::RpcClient::new(&state.config.solana_rpc_url);
+    let rpc_client = solana_client::rpc_client::RpcClient::new(&state.config.solana_rpc_url);
     let blockhash = rpc_client
         .get_latest_blockhash()
         .map_err(|e| AppError::SolanaRpcError {
@@ -629,8 +597,11 @@ async fn build_solana_message(
     );
 
     // Build the message
-    let message =
-        solana_sdk::message::Message::new_with_blockhash(&[instruction], Some(&from_pubkey), &blockhash);
+    let message = solana_sdk::message::Message::new_with_blockhash(
+        &[instruction],
+        Some(&from_pubkey),
+        &blockhash,
+    );
 
     // Serialize the message -- this is what gets signed
     let message_bytes = message.serialize();
@@ -654,8 +625,7 @@ async fn aggregate(
     }
 
     // Verify both nodes completed both rounds
-    let round_states =
-        db::signing::get_signing_round_states(&state.pool, id).await?;
+    let round_states = db::signing::get_signing_round_states(&state.pool, id).await?;
 
     for nid in &NODE_IDS {
         for round in 1..=2i16 {
@@ -667,9 +637,7 @@ async fn aggregate(
                 })?;
             if rs.status != "complete" {
                 return Err(AppError::RoundPrecondition {
-                    message: format!(
-                        "{nid} has not completed round {round}"
-                    ),
+                    message: format!("{nid} has not completed round {round}"),
                 });
             }
         }
@@ -679,11 +647,14 @@ async fn aggregate(
     db::signing::update_signing_request_status(&state.pool, id, "aggregating").await?;
 
     // Retrieve the stored transaction message
-    let tx_message_bytes = signing_request.tx_message.clone().ok_or_else(|| {
-        AppError::Internal {
-            message: "Transaction message not set (Round 2 was not completed properly)".to_string(),
-        }
-    })?;
+    let tx_message_bytes =
+        signing_request
+            .tx_message
+            .clone()
+            .ok_or_else(|| AppError::Internal {
+                message: "Transaction message not set (Round 2 was not completed properly)"
+                    .to_string(),
+            })?;
 
     // Build the commitments map for the SigningPackage
     let mut commitments_map: BTreeMap<Identifier, frost::round1::SigningCommitments> =
@@ -722,20 +693,15 @@ async fn aggregate(
         })?;
 
         let identifier = node_id_to_identifier(nid)?;
-        let share: frost::round2::SignatureShare =
-            serde_json::from_value(share_json.clone()).map_err(|e| {
-                AppError::AggregationFailed {
-                    message: format!(
-                        "Failed to deserialize signature share from {nid}: {e}"
-                    ),
-                }
+        let share: frost::round2::SignatureShare = serde_json::from_value(share_json.clone())
+            .map_err(|e| AppError::AggregationFailed {
+                message: format!("Failed to deserialize signature share from {nid}: {e}"),
             })?;
         signature_shares_map.insert(identifier, share);
     }
 
     // Build the SigningPackage (same commitments + message as used in round 2)
-    let signing_package =
-        frost::SigningPackage::new(commitments_map, &tx_message_bytes);
+    let signing_package = frost::SigningPackage::new(commitments_map, &tx_message_bytes);
 
     // Derive the child public key package for this wallet index
     let session = db::dkg::get_completed_session(&state.pool)
@@ -757,9 +723,12 @@ async fn aggregate(
             .ok_or_else(|| AppError::Internal {
                 message: format!("DKG Round 3 not complete for {nid}"),
             })?;
-        let output = r3.output_package.as_ref().ok_or_else(|| AppError::Internal {
-            message: format!("{nid} DKG Round 3 output_package is null"),
-        })?;
+        let output = r3
+            .output_package
+            .as_ref()
+            .ok_or_else(|| AppError::Internal {
+                message: format!("{nid} DKG Round 3 output_package is null"),
+            })?;
         let vs = output
             .get("verifying_share")
             .and_then(|v| v.as_str())
@@ -792,14 +761,18 @@ async fn aggregate(
     );
 
     // Build and broadcast the Solana transaction
-    match broadcast_transaction(&state, &signing_request, &tx_message_bytes, &group_signature)
-        .await
+    match broadcast_transaction(
+        &state,
+        &signing_request,
+        &tx_message_bytes,
+        &group_signature,
+    )
+    .await
     {
         Ok(tx_sig) => {
             let tx_sig_str = tx_sig.to_string();
-            let explorer_url = format!(
-                "https://explorer.solana.com/tx/{tx_sig_str}?cluster=devnet"
-            );
+            let explorer_url =
+                format!("https://explorer.solana.com/tx/{tx_sig_str}?cluster=devnet");
 
             // Update status to broadcasted
             db::signing::update_signing_request_tx(
@@ -834,14 +807,8 @@ async fn aggregate(
         }
         Err(e) => {
             let err_msg = format!("{e}");
-            db::signing::update_signing_request_tx(
-                &state.pool,
-                id,
-                "failed",
-                None,
-                Some(&err_msg),
-            )
-            .await?;
+            db::signing::update_signing_request_tx(&state.pool, id, "failed", None, Some(&err_msg))
+                .await?;
 
             Err(AppError::BroadcastFailed { message: err_msg })
         }
@@ -863,16 +830,17 @@ async fn broadcast_transaction(
 
     // Extract the FROST group signature bytes.
     // frost-ed25519 Signature serializes as 64 bytes (R || s).
-    let frost_sig_bytes = group_signature.serialize().map_err(|e| AppError::Internal {
-        message: format!("Failed to serialize FROST signature: {e}"),
-    })?;
+    let frost_sig_bytes = group_signature
+        .serialize()
+        .map_err(|e| AppError::Internal {
+            message: format!("Failed to serialize FROST signature: {e}"),
+        })?;
 
     // Create a Solana Signature from the 64 bytes
-    let sol_sig = SolSignature::try_from(frost_sig_bytes.as_slice()).map_err(|e| {
-        AppError::Internal {
+    let sol_sig =
+        SolSignature::try_from(frost_sig_bytes.as_slice()).map_err(|e| AppError::Internal {
             message: format!("Failed to convert FROST signature to Solana signature: {e}"),
-        }
-    })?;
+        })?;
 
     // Build the transaction with the pre-signed signature.
     // A Solana Transaction consists of signatures + message.
@@ -881,8 +849,7 @@ async fn broadcast_transaction(
     tx.signatures = vec![sol_sig];
 
     // Broadcast via RPC
-    let rpc_client =
-        solana_client::rpc_client::RpcClient::new(&state.config.solana_rpc_url);
+    let rpc_client = solana_client::rpc_client::RpcClient::new(&state.config.solana_rpc_url);
 
     let tx_signature = rpc_client
         .send_transaction(&tx)
@@ -923,10 +890,7 @@ async fn poll_confirmation(
                 if let Some(Some(status)) = response.value.first() {
                     // 1. Check for on-chain error first
                     if status.err.is_some() {
-                        let err_msg = format!(
-                            "Transaction failed on-chain: {:?}",
-                            status.err
-                        );
+                        let err_msg = format!("Transaction failed on-chain: {:?}", status.err);
                         let _ = db::signing::update_signing_request_tx(
                             &pool,
                             signing_request_id,

@@ -29,9 +29,7 @@ pub struct AppState {
 async fn main() {
     // Initialize structured logging
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive("info".parse().unwrap()),
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
         .init();
 
     let config = Config::from_env();
@@ -65,14 +63,7 @@ async fn main() {
         http_client,
     };
 
-    let app = Router::new()
-        .route("/health", get(routes::health))
-        .nest("/api/dkg", routes::dkg::router())
-        .nest("/api/wallets", routes::wallets::router())
-        .nest("/api/signing-requests", routes::signing::router())
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = build_app(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!(%addr, "Coordinator listening");
@@ -83,6 +74,21 @@ async fn main() {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();
+}
+
+/// Build the application router with all routes and middleware.
+///
+/// Extracted from `main` so tests can construct the app without starting a
+/// real TCP listener.
+pub fn build_app(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(routes::health))
+        .nest("/api/dkg", routes::dkg::router())
+        .nest("/api/wallets", routes::wallets::router())
+        .nest("/api/signing-requests", routes::signing::router())
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 /// Wait for a SIGINT (ctrl-c) or SIGTERM signal for graceful shutdown.

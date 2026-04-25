@@ -38,6 +38,7 @@ pub async fn get_session_by_id(pool: &PgPool, id: Uuid) -> AppResult<Option<DkgS
 /// Create a new DKG session and pre-populate round state rows for both nodes.
 pub async fn create_session(pool: &PgPool) -> AppResult<DkgSessionRow> {
     let session_id = Uuid::new_v4();
+    let mut tx = pool.begin().await?;
 
     // Insert the session
     let row = sqlx::query_as::<_, DkgSessionRow>(
@@ -48,7 +49,7 @@ pub async fn create_session(pool: &PgPool) -> AppResult<DkgSessionRow> {
         "#,
     )
     .bind(session_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     // Pre-populate round state for all node + round combinations
@@ -64,19 +65,18 @@ pub async fn create_session(pool: &PgPool) -> AppResult<DkgSessionRow> {
             .bind(session_id)
             .bind(node_id)
             .bind(round)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
         }
     }
+
+    tx.commit().await?;
 
     Ok(row)
 }
 
 /// Fetch all round state rows for a given session.
-pub async fn get_round_states(
-    pool: &PgPool,
-    session_id: Uuid,
-) -> AppResult<Vec<DkgRoundStateRow>> {
+pub async fn get_round_states(pool: &PgPool, session_id: Uuid) -> AppResult<Vec<DkgRoundStateRow>> {
     let rows = sqlx::query_as::<_, DkgRoundStateRow>(
         r#"
         SELECT id, session_id, node_id, round, status::text, output_package,

@@ -12,6 +12,7 @@ pub async fn create_signing_request(
     amount_lamports: i64,
 ) -> AppResult<SigningRequestRow> {
     let id = Uuid::new_v4();
+    let mut tx = pool.begin().await?;
 
     let row = sqlx::query_as::<_, SigningRequestRow>(
         r#"
@@ -25,7 +26,7 @@ pub async fn create_signing_request(
     .bind(wallet_index)
     .bind(recipient)
     .bind(amount_lamports)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     // Pre-populate round state rows for both nodes, rounds 1 and 2
@@ -41,10 +42,12 @@ pub async fn create_signing_request(
             .bind(id)
             .bind(node_id)
             .bind(round)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
         }
     }
+
+    tx.commit().await?;
 
     Ok(row)
 }
@@ -65,10 +68,7 @@ pub async fn list_signing_requests(pool: &PgPool) -> AppResult<Vec<SigningReques
 }
 
 /// Fetch a signing request by ID.
-pub async fn get_signing_request(
-    pool: &PgPool,
-    id: Uuid,
-) -> AppResult<Option<SigningRequestRow>> {
+pub async fn get_signing_request(pool: &PgPool, id: Uuid) -> AppResult<Option<SigningRequestRow>> {
     let row = sqlx::query_as::<_, SigningRequestRow>(
         r#"
         SELECT id, wallet_index, recipient, amount_lamports, status::text,
@@ -151,11 +151,7 @@ pub async fn complete_signing_round(
 }
 
 /// Update signing request status.
-pub async fn update_signing_request_status(
-    pool: &PgPool,
-    id: Uuid,
-    status: &str,
-) -> AppResult<()> {
+pub async fn update_signing_request_status(pool: &PgPool, id: Uuid, status: &str) -> AppResult<()> {
     sqlx::query(
         r#"
         UPDATE signing_requests

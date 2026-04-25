@@ -70,7 +70,7 @@ transactions
 
 ```bash
 # Clone and start
-git clone <https://github.com/nonolinnn/frost-template>
+git clone https://github.com/nonolinnn/frost-template
 cd frost-template
 cp .env.example .env
 docker compose up --build
@@ -99,14 +99,21 @@ Wait for all services to become healthy, then open **http://localhost:3000**.
 2. Click **Derive Wallet** — generates a child wallet (Solana address) from the master key
 3. The address appears with its balance (initially 0 SOL)
 
-### 3. Fund Wallet (Devnet Airdrop)
+### 3. Fund Wallet
 
+The derived wallet address is displayed in the **Wallets** tab. Copy it and use either option below to send Devnet SOL:
+
+**Option A — Web Faucet (no CLI required)**
+1. Copy the wallet address from the Wallets tab
+2. Go to **https://faucet.solana.com**
+3. Paste the address, select Devnet, and request SOL
+
+**Option B — Solana CLI**
 ```bash
 solana airdrop 1 <wallet-address> --url devnet
 ```
 
-> Requires the [Solana CLI](https://docs.solanalabs.com/cli/install). Refresh the Wallets
-tab to see the updated balance.
+After funding, refresh the Wallets tab to confirm the balance updated before proceeding to signing.
 
 ### 4. Sign & Broadcast Transaction
 
@@ -152,8 +159,8 @@ cd backend
 cargo test --workspace
 ```
 
-15 tests covering DKG round-trip correctness, HD wallet derivation consistency, and
-threshold signing verification.
+23 tests covering API input validation, DKG precondition enforcement, HD wallet
+derivation consistency, and threshold signing correctness.
 
 ### Integration Tests
 
@@ -214,10 +221,11 @@ frost-template/
 │       └── migrations/
 ├── tests/
 │   └── integration-test.sh     # End-to-end API test script
-├── docker/
-│   └── postgres/
-│       └── init-databases.sql  # Multi-database initialization
-    └── ai-journal.md           # AI development journal
+├── docs/
+│   └── ai-journal.md           # AI development journal
+└── docker/
+    └── postgres/
+        └── init-databases.sql  # Multi-database initialization
 ```
 
 ## Development Setup (without Docker)

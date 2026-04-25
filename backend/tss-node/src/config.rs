@@ -28,11 +28,10 @@ impl Config {
             .and_then(|p| p.parse().ok())
             .unwrap_or(8081);
 
-        let node_id =
-            std::env::var("NODE_ID").unwrap_or_else(|_| "node-a".into());
+        let node_id = std::env::var("NODE_ID").unwrap_or_else(|_| "node-a".into());
 
-        let coordinator_url = std::env::var("COORDINATOR_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".into());
+        let coordinator_url =
+            std::env::var("COORDINATOR_URL").unwrap_or_else(|_| "http://localhost:8080".into());
 
         Self {
             database_url,

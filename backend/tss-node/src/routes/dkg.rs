@@ -75,10 +75,9 @@ async fn round1(
     let secret_json = serde_json::to_value(&round1_secret).map_err(|e| AppError::Internal {
         message: format!("Failed to serialize round1 secret: {e}"),
     })?;
-    let package_json =
-        serde_json::to_value(&round1_package).map_err(|e| AppError::Internal {
-            message: format!("Failed to serialize round1 package: {e}"),
-        })?;
+    let package_json = serde_json::to_value(&round1_package).map_err(|e| AppError::Internal {
+        message: format!("Failed to serialize round1 package: {e}"),
+    })?;
 
     // Persist secret locally (never leaves the node)
     db::dkg::insert_round_data(&state.pool, session_id, 1, &secret_json).await?;
@@ -126,19 +125,17 @@ async fn round2(
 
     // Build the BTreeMap<Identifier, round1::Package> from the other node's package
     let other_id = other_node_id(node_id);
-    let other_package_json = body
-        .round1_packages
-        .get(other_id)
-        .ok_or_else(|| AppError::InvalidPackages {
-            message: format!("Missing round1 package from {other_id}"),
-        })?;
+    let other_package_json =
+        body.round1_packages
+            .get(other_id)
+            .ok_or_else(|| AppError::InvalidPackages {
+                message: format!("Missing round1 package from {other_id}"),
+            })?;
 
     let other_identifier = node_id_to_identifier(other_id)?;
-    let other_package: dkg::round1::Package =
-        serde_json::from_value(other_package_json.clone()).map_err(|e| {
-            AppError::InvalidPackages {
-                message: format!("Failed to deserialize round1 package from {other_id}: {e}"),
-            }
+    let other_package: dkg::round1::Package = serde_json::from_value(other_package_json.clone())
+        .map_err(|e| AppError::InvalidPackages {
+            message: format!("Failed to deserialize round1 package from {other_id}: {e}"),
         })?;
 
     let mut round1_packages = BTreeMap::new();
@@ -151,21 +148,21 @@ async fn round2(
         })?;
 
     // The round2_packages map contains one entry: our package for the other node
-    let round2_package_for_other = round2_packages
-        .get(&other_identifier)
-        .ok_or_else(|| AppError::Internal {
-            message: "dkg::part2 did not produce a package for the other node".to_string(),
-        })?;
+    let round2_package_for_other =
+        round2_packages
+            .get(&other_identifier)
+            .ok_or_else(|| AppError::Internal {
+                message: "dkg::part2 did not produce a package for the other node".to_string(),
+            })?;
 
     // Serialize for storage
     let secret_json = serde_json::to_value(&round2_secret).map_err(|e| AppError::Internal {
         message: format!("Failed to serialize round2 secret: {e}"),
     })?;
-    let package_json = serde_json::to_value(round2_package_for_other).map_err(|e| {
-        AppError::Internal {
+    let package_json =
+        serde_json::to_value(round2_package_for_other).map_err(|e| AppError::Internal {
             message: format!("Failed to serialize round2 package: {e}"),
-        }
-    })?;
+        })?;
 
     // Persist Round 2 secret locally
     db::dkg::insert_round_data(&state.pool, session_id, 2, &secret_json).await?;
@@ -222,8 +219,8 @@ async fn round3(
             .ok_or_else(|| AppError::InvalidPackages {
                 message: format!("Missing round1 package from {other_id}"),
             })?;
-    let other_r1_package: dkg::round1::Package =
-        serde_json::from_value(other_r1_json.clone()).map_err(|e| AppError::InvalidPackages {
+    let other_r1_package: dkg::round1::Package = serde_json::from_value(other_r1_json.clone())
+        .map_err(|e| AppError::InvalidPackages {
             message: format!("Failed to deserialize round1 package from {other_id}: {e}"),
         })?;
 
@@ -237,8 +234,8 @@ async fn round3(
             .ok_or_else(|| AppError::InvalidPackages {
                 message: format!("Missing round2 package from {other_id}"),
             })?;
-    let other_r2_package: dkg::round2::Package =
-        serde_json::from_value(other_r2_json.clone()).map_err(|e| AppError::InvalidPackages {
+    let other_r2_package: dkg::round2::Package = serde_json::from_value(other_r2_json.clone())
+        .map_err(|e| AppError::InvalidPackages {
             message: format!("Failed to deserialize round2 package from {other_id}: {e}"),
         })?;
 
@@ -255,9 +252,11 @@ async fn round3(
 
     // Extract the group verifying key and encode as Base58
     let verifying_key = public_key_package.verifying_key();
-    let vk_bytes = verifying_key.serialize().map_err(|e| AppError::CryptoError {
-        message: format!("Failed to serialize verifying key: {e}"),
-    })?;
+    let vk_bytes = verifying_key
+        .serialize()
+        .map_err(|e| AppError::CryptoError {
+            message: format!("Failed to serialize verifying key: {e}"),
+        })?;
     let group_public_key = bs58::encode(&vk_bytes).into_string();
 
     // Extract this node's verifying share and encode as Base58
@@ -268,16 +267,17 @@ async fn round3(
         .ok_or_else(|| AppError::Internal {
             message: "Verifying share not found for this node".to_string(),
         })?;
-    let vs_bytes = verifying_share.serialize().map_err(|e| AppError::CryptoError {
-        message: format!("Failed to serialize verifying share: {e}"),
-    })?;
+    let vs_bytes = verifying_share
+        .serialize()
+        .map_err(|e| AppError::CryptoError {
+            message: format!("Failed to serialize verifying share: {e}"),
+        })?;
     let verifying_share_b58 = bs58::encode(&vs_bytes).into_string();
 
     // Serialize and persist key material
-    let key_package_json =
-        serde_json::to_value(&key_package).map_err(|e| AppError::Internal {
-            message: format!("Failed to serialize key_package: {e}"),
-        })?;
+    let key_package_json = serde_json::to_value(&key_package).map_err(|e| AppError::Internal {
+        message: format!("Failed to serialize key_package: {e}"),
+    })?;
     let public_key_package_json =
         serde_json::to_value(&public_key_package).map_err(|e| AppError::Internal {
             message: format!("Failed to serialize public_key_package: {e}"),

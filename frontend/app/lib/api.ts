@@ -85,7 +85,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json" },
       ...options,
     });
-  } catch (err) {
+  } catch {
     throw new ApiRequestError(
       "Unable to connect to the coordinator. Is the backend running?",
       "CONNECTION_ERROR",

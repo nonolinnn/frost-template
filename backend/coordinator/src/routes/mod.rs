@@ -7,6 +7,9 @@ pub mod dkg;
 pub mod signing;
 pub mod wallets;
 
+#[cfg(test)]
+mod api_tests;
+
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Value};

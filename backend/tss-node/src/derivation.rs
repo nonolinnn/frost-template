@@ -56,22 +56,15 @@ fn frost_vk_bytes_to_extended_pk(
 /// This shift is the same value that both the coordinator and nodes compute.
 /// The coordinator uses it implicitly (child_pk = parent_pk + shift*G).
 /// The node uses it explicitly (child_share = parent_share + shift).
-fn derive_shift(
-    group_vk_bytes: &[u8; 32],
-    wallet_index: u32,
-) -> Result<Scalar<Ed25519>, AppError> {
+fn derive_shift(group_vk_bytes: &[u8; 32], wallet_index: u32) -> Result<Scalar<Ed25519>, AppError> {
     let parent_pk = frost_vk_bytes_to_extended_pk(group_vk_bytes)?;
 
     let child_index = NonHardenedIndex::try_from(wallet_index).map_err(|_| AppError::Internal {
-        message: format!(
-            "Wallet index {wallet_index} is out of range for non-hardened derivation"
-        ),
+        message: format!("Wallet index {wallet_index} is out of range for non-hardened derivation"),
     })?;
 
-    let derived = <Edwards as hd_wallet::DeriveShift<Ed25519>>::derive_public_shift(
-        &parent_pk,
-        child_index,
-    );
+    let derived =
+        <Edwards as hd_wallet::DeriveShift<Ed25519>>::derive_public_shift(&parent_pk, child_index);
 
     Ok(derived.shift)
 }
@@ -106,38 +99,38 @@ pub fn derive_child_key_package(
     for (i, b) in shift_be_bytes.as_ref().iter().enumerate() {
         shift_le_bytes[31 - i] = *b;
     }
-    let dalek_shift =
-        curve25519_dalek::Scalar::from_canonical_bytes(shift_le_bytes).into_option().ok_or_else(|| {
-            AppError::CryptoError {
-                message: "Derived shift is not a canonical scalar".to_string(),
-            }
+    let dalek_shift = curve25519_dalek::Scalar::from_canonical_bytes(shift_le_bytes)
+        .into_option()
+        .ok_or_else(|| AppError::CryptoError {
+            message: "Derived shift is not a canonical scalar".to_string(),
         })?;
 
     // Derive child signing share: parent_share + shift
     // We need to extract the raw scalar from the SigningShare, add the shift,
     // and create a new SigningShare. Since SigningShare::new() and to_scalar()
     // are pub(crate) in frost-core, we go through serde serialization.
-    let parent_share_json = serde_json::to_value(key_package.signing_share())
-        .map_err(|e| AppError::Internal {
+    let parent_share_json =
+        serde_json::to_value(key_package.signing_share()).map_err(|e| AppError::Internal {
             message: format!("Failed to serialize signing share: {e}"),
         })?;
 
     // SigningShare serializes as a hex string of the 32-byte scalar (little-endian)
-    let parent_share_hex = parent_share_json.as_str().ok_or_else(|| AppError::Internal {
-        message: "SigningShare JSON is not a string".to_string(),
-    })?;
+    let parent_share_hex = parent_share_json
+        .as_str()
+        .ok_or_else(|| AppError::Internal {
+            message: "SigningShare JSON is not a string".to_string(),
+        })?;
     let parent_share_bytes = hex::decode(parent_share_hex).map_err(|e| AppError::Internal {
         message: format!("Failed to decode signing share hex: {e}"),
     })?;
 
     let mut parent_scalar_bytes = [0u8; 32];
     parent_scalar_bytes.copy_from_slice(&parent_share_bytes);
-    let parent_scalar =
-        curve25519_dalek::Scalar::from_canonical_bytes(parent_scalar_bytes).into_option().ok_or_else(
-            || AppError::CryptoError {
-                message: "Parent signing share is not a canonical scalar".to_string(),
-            },
-        )?;
+    let parent_scalar = curve25519_dalek::Scalar::from_canonical_bytes(parent_scalar_bytes)
+        .into_option()
+        .ok_or_else(|| AppError::CryptoError {
+            message: "Parent signing share is not a canonical scalar".to_string(),
+        })?;
 
     // child_scalar = parent_scalar + shift
     let child_scalar = parent_scalar + dalek_shift;
@@ -161,11 +154,9 @@ pub fn derive_child_key_package(
 
     // Convert to FROST VerifyingKey via serde
     let child_vk_hex = hex::encode(child_vk_bytes.as_ref());
-    let child_vk: VerifyingKey =
-        serde_json::from_value(serde_json::Value::String(child_vk_hex)).map_err(|e| {
-            AppError::Internal {
-                message: format!("Failed to deserialize child verifying key: {e}"),
-            }
+    let child_vk: VerifyingKey = serde_json::from_value(serde_json::Value::String(child_vk_hex))
+        .map_err(|e| AppError::Internal {
+            message: format!("Failed to deserialize child verifying key: {e}"),
         })?;
 
     // Derive child verifying shares for each participant.
@@ -177,12 +168,9 @@ pub fn derive_child_key_package(
         let parent_vs_json = serde_json::to_value(parent_vs).map_err(|e| AppError::Internal {
             message: format!("Failed to serialize verifying share: {e}"),
         })?;
-        let parent_vs_hex =
-            parent_vs_json
-                .as_str()
-                .ok_or_else(|| AppError::Internal {
-                    message: "VerifyingShare JSON is not a string".to_string(),
-                })?;
+        let parent_vs_hex = parent_vs_json.as_str().ok_or_else(|| AppError::Internal {
+            message: "VerifyingShare JSON is not a string".to_string(),
+        })?;
         let parent_vs_bytes = hex::decode(parent_vs_hex).map_err(|e| AppError::Internal {
             message: format!("Failed to decode verifying share hex: {e}"),
         })?;
@@ -403,10 +391,8 @@ mod tests {
         let message = b"test message for FROST threshold signing";
 
         // Round 1: generate nonces and commitments
-        let (nonces_a, commitments_a) =
-            frost::round1::commit(kp_a.signing_share(), &mut rng);
-        let (nonces_b, commitments_b) =
-            frost::round1::commit(kp_b.signing_share(), &mut rng);
+        let (nonces_a, commitments_a) = frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) = frost::round1::commit(kp_b.signing_share(), &mut rng);
 
         // Build commitments map
         let mut commitments_map = BTreeMap::new();
@@ -417,18 +403,15 @@ mod tests {
         let signing_package = SigningPackage::new(commitments_map, message);
 
         // Round 2: each node produces a signature share
-        let sig_share_a =
-            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
-        let sig_share_b =
-            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+        let sig_share_a = frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b = frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
 
         // Aggregate
         let mut sig_shares = BTreeMap::new();
         sig_shares.insert(*kp_a.identifier(), sig_share_a);
         sig_shares.insert(*kp_b.identifier(), sig_share_b);
 
-        let group_signature =
-            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+        let group_signature = frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
 
         // Verify the aggregated signature against the group verifying key
         let vk = pkp_a.verifying_key();
@@ -453,10 +436,8 @@ mod tests {
             derive_child_key_package(&kp_b, &pkp_b, wallet_index).unwrap();
 
         // Round 1: generate nonces and commitments using child signing shares
-        let (nonces_a, commitments_a) =
-            frost::round1::commit(child_kp_a.signing_share(), &mut rng);
-        let (nonces_b, commitments_b) =
-            frost::round1::commit(child_kp_b.signing_share(), &mut rng);
+        let (nonces_a, commitments_a) = frost::round1::commit(child_kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) = frost::round1::commit(child_kp_b.signing_share(), &mut rng);
 
         // Build commitments map
         let mut commitments_map = BTreeMap::new();
@@ -467,10 +448,8 @@ mod tests {
         let signing_package = SigningPackage::new(commitments_map, message);
 
         // Round 2
-        let sig_share_a =
-            frost::round2::sign(&signing_package, &nonces_a, &child_kp_a).unwrap();
-        let sig_share_b =
-            frost::round2::sign(&signing_package, &nonces_b, &child_kp_b).unwrap();
+        let sig_share_a = frost::round2::sign(&signing_package, &nonces_a, &child_kp_a).unwrap();
+        let sig_share_b = frost::round2::sign(&signing_package, &nonces_b, &child_kp_b).unwrap();
 
         // Aggregate using the child public key package
         let mut sig_shares = BTreeMap::new();
@@ -495,10 +474,8 @@ mod tests {
         let mut rng = OsRng;
         let message = b"check signature byte length";
 
-        let (nonces_a, commitments_a) =
-            frost::round1::commit(kp_a.signing_share(), &mut rng);
-        let (nonces_b, commitments_b) =
-            frost::round1::commit(kp_b.signing_share(), &mut rng);
+        let (nonces_a, commitments_a) = frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) = frost::round1::commit(kp_b.signing_share(), &mut rng);
 
         let mut commitments_map = BTreeMap::new();
         commitments_map.insert(*kp_a.identifier(), commitments_a);
@@ -506,17 +483,14 @@ mod tests {
 
         let signing_package = SigningPackage::new(commitments_map, message);
 
-        let sig_share_a =
-            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
-        let sig_share_b =
-            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+        let sig_share_a = frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b = frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
 
         let mut sig_shares = BTreeMap::new();
         sig_shares.insert(*kp_a.identifier(), sig_share_a);
         sig_shares.insert(*kp_b.identifier(), sig_share_b);
 
-        let group_signature =
-            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+        let group_signature = frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
 
         // Ed25519 signatures are 64 bytes (R || s)
         let sig_bytes = group_signature.serialize().unwrap();
@@ -535,10 +509,8 @@ mod tests {
         let message = b"the real message";
         let wrong_message = b"a different message";
 
-        let (nonces_a, commitments_a) =
-            frost::round1::commit(kp_a.signing_share(), &mut rng);
-        let (nonces_b, commitments_b) =
-            frost::round1::commit(kp_b.signing_share(), &mut rng);
+        let (nonces_a, commitments_a) = frost::round1::commit(kp_a.signing_share(), &mut rng);
+        let (nonces_b, commitments_b) = frost::round1::commit(kp_b.signing_share(), &mut rng);
 
         let mut commitments_map = BTreeMap::new();
         commitments_map.insert(*kp_a.identifier(), commitments_a);
@@ -546,17 +518,14 @@ mod tests {
 
         let signing_package = SigningPackage::new(commitments_map, message);
 
-        let sig_share_a =
-            frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
-        let sig_share_b =
-            frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
+        let sig_share_a = frost::round2::sign(&signing_package, &nonces_a, &kp_a).unwrap();
+        let sig_share_b = frost::round2::sign(&signing_package, &nonces_b, &kp_b).unwrap();
 
         let mut sig_shares = BTreeMap::new();
         sig_shares.insert(*kp_a.identifier(), sig_share_a);
         sig_shares.insert(*kp_b.identifier(), sig_share_b);
 
-        let group_signature =
-            frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
+        let group_signature = frost::aggregate(&signing_package, &sig_shares, &pkp_a).unwrap();
 
         // Verification against the wrong message should fail
         let vk = pkp_a.verifying_key();

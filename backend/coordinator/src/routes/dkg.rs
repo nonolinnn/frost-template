@@ -7,9 +7,7 @@ use axum::{Json, Router};
 
 use crate::db;
 use crate::error::{AppError, AppResult};
-use crate::models::dkg::{
-    DkgRoundResponse, DkgStartResponse, DkgStatusResponse, NodeRoundStatus,
-};
+use crate::models::dkg::{DkgRoundResponse, DkgStartResponse, DkgStatusResponse, NodeRoundStatus};
 use crate::AppState;
 
 /// Build the DKG sub-router.
@@ -185,12 +183,8 @@ async fn execute_round(
 
     match round {
         1 => execute_round1(&state, session_id, &node_id, &node_url).await?,
-        2 => {
-            execute_round2(&state, session_id, &node_id, other_id, &node_url).await?
-        }
-        3 => {
-            execute_round3(&state, session_id, &node_id, other_id, &node_url).await?
-        }
+        2 => execute_round2(&state, session_id, &node_id, other_id, &node_url).await?,
+        3 => execute_round3(&state, session_id, &node_id, other_id, &node_url).await?,
         _ => unreachable!(),
     }
 
@@ -226,11 +220,12 @@ async fn execute_round(
             })?;
 
         // The output_package stores { "group_public_key": "...", "verifying_share": "..." }
-        let output = r3_state.output_package.as_ref().ok_or_else(|| {
-            AppError::Internal {
+        let output = r3_state
+            .output_package
+            .as_ref()
+            .ok_or_else(|| AppError::Internal {
                 message: "Round 3 output_package is null".to_string(),
-            }
-        })?;
+            })?;
 
         let gpk = output
             .get("group_public_key")
@@ -291,12 +286,13 @@ async fn execute_round1(
     })?;
 
     // Store the round1_package as the output_package for this round
-    let round1_package = resp.get("round1_package").cloned().ok_or_else(|| {
-        AppError::NodeError {
-            node_id: node_id.to_string(),
-            message: "round1_package missing from response".to_string(),
-        }
-    })?;
+    let round1_package =
+        resp.get("round1_package")
+            .cloned()
+            .ok_or_else(|| AppError::NodeError {
+                node_id: node_id.to_string(),
+                message: "round1_package missing from response".to_string(),
+            })?;
 
     db::dkg::complete_round(&state.pool, session_id, node_id, 1, Some(round1_package)).await?;
 
@@ -370,12 +366,13 @@ async fn execute_round2(
     })?;
 
     // Store the round2_package as the output for this round
-    let round2_package = resp.get("round2_package").cloned().ok_or_else(|| {
-        AppError::NodeError {
-            node_id: node_id.to_string(),
-            message: "round2_package missing from response".to_string(),
-        }
-    })?;
+    let round2_package =
+        resp.get("round2_package")
+            .cloned()
+            .ok_or_else(|| AppError::NodeError {
+                node_id: node_id.to_string(),
+                message: "round2_package missing from response".to_string(),
+            })?;
 
     db::dkg::complete_round(&state.pool, session_id, node_id, 2, Some(round2_package)).await?;
 

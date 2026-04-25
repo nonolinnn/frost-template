@@ -186,7 +186,6 @@ function StatusTimeline({ status }: { status: SigningRequestStatus }) {
         {TIMELINE_STEPS.map((step, i) => {
           const isComplete = !isFailed && currentIdx > i;
           const isActive = !isFailed && currentIdx === i;
-          const isWaiting = isFailed || currentIdx < i;
 
           return (
             <div key={step.key} className="contents">
