@@ -258,8 +258,8 @@ NODE_ID=node-a DATABASE_URL=postgresql://localhost/node_a_db cargo run -p tss-no
 NODE_ID=node-b DATABASE_URL=postgresql://localhost/node_b_db PORT=8082 cargo run -p tss-node
 ```
 
-## AI Development Journal
+## Development Journal
 
-See [`docs/ai-journal.md`](docs/ai-journal.md) for the complete record of AI-assisted
+See [`docs/dev-journal.md`](docs/dev-journal.md) for the complete record of AI-assisted
 development, including prompt engineering decisions, review judgments, and course
 corrections throughout the build process.
