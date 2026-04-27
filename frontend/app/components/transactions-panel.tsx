@@ -418,6 +418,7 @@ export default function TransactionsPanel({ dkgComplete, selectedWalletIndex }: 
   const [amountSol, setAmountSol] = useState("");
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [formWarning, setFormWarning] = useState<string | null>(null);
   const [showWalletDropdown, setShowWalletDropdown] = useState(false);
 
   // Execution state
@@ -505,6 +506,7 @@ export default function TransactionsPanel({ dkgComplete, selectedWalletIndex }: 
 
   const handleCreateRequest = async () => {
     setFormError(null);
+    setFormWarning(null);
 
     // Validation
     if (senderIndex === null) {
@@ -525,11 +527,13 @@ export default function TransactionsPanel({ dkgComplete, selectedWalletIndex }: 
       return;
     }
 
-    // Balance warning
+    // Balance warning (non-blocking — FROST signing still works without funds)
     const senderBalance = walletBalances[senderIndex];
     if (senderBalance && amount > senderBalance.balance_sol) {
-      setFormError(`Insufficient balance. Wallet has ${senderBalance.balance_sol.toFixed(3)} SOL.`);
-      return;
+      setFormWarning(
+        `Insufficient balance (${senderBalance.balance_sol.toFixed(3)} SOL). ` +
+        `The FROST signing rounds will still complete, but the broadcast will fail with insufficient funds.`
+      );
     }
 
     setCreating(true);
@@ -790,6 +794,16 @@ export default function TransactionsPanel({ dkgComplete, selectedWalletIndex }: 
           <div className="mt-3 flex items-center gap-2">
             <ErrorIcon />
             <p className="text-xs text-accent-red">{formError}</p>
+          </div>
+        )}
+
+        {/* Balance Warning (non-blocking) */}
+        {formWarning && !formError && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <p className="text-xs text-amber-300">{formWarning}</p>
           </div>
         )}
       </div>
