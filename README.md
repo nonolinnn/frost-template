@@ -222,7 +222,7 @@ frost-template/
 ├── tests/
 │   └── integration-test.sh     # End-to-end API test script
 ├── docs/
-│   └── ai-journal.md           # AI development journal
+│   └── dev-journal.md           # AI development journal
 └── docker/
     └── postgres/
         └── init-databases.sql  # Multi-database initialization
